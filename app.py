@@ -777,8 +777,8 @@ def validate():
                 errors.append("City is empty but address is provided")
             
             # Check for PO Box addresses
-            if address and re.search(r'p\.?o\.?\s*box', address.lower()):
-                errors.append("Address is a PO Box")
+            #if address and re.search(r'p\.?o\.?\s*box', address.lower()):
+                #errors.append("Address is a PO Box")
             
             # Check for common test addresses
             #test_addresses = ['123 main', 'test address', '123 test', 'main street']
@@ -797,7 +797,7 @@ def validate():
         
         def validate_language_country_consistency(row):
             """Check if language code is consistent with country code"""
-            errors = []
+            return None
             
             language_code = row.get('signuplanguagecode', '')
             country_code = row.get('countrycode', '')
@@ -861,13 +861,7 @@ def validate():
             for pattern in test_patterns:
                 if re.search(pattern, email):
                     return "Email appears to be a test address"
-            
-            # Check for numeric-only local part
-            local_part = email.split('@')[0]
-            if local_part.isdigit():
-                return "Email username contains only numbers"
-            
-            return None
+
         
         def validate_player_code(code):
             """Validate player code format"""

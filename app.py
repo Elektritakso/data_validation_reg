@@ -781,9 +781,9 @@ def validate():
                 errors.append("Address is a PO Box")
             
             # Check for common test addresses
-            test_addresses = ['123 main', 'test address', '123 test', 'main street']
-            if address and any(test_addr in address.lower() for test_addr in test_addresses):
-                errors.append("Address appears to be a test/placeholder")
+            #test_addresses = ['123 main', 'test address', '123 test', 'main street']
+            #if address and any(test_addr in address.lower() for test_addr in test_addresses):
+                #errors.append("Address appears to be a test/placeholder")
             
             # Country-specific address validations
             if country_code:

@@ -16,9 +16,6 @@ app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 2048 * 1024 * 1024 
 app.secret_key = os.urandom(24)  # For session management
 
-
-
-
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
 

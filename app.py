@@ -307,6 +307,9 @@ def validate_country_code(code):
         return "Cannot be NULL or empty"  # Empty country code is allowed
     
     code = str(code).strip().upper()
+
+    if code == "00":
+        return None  # "00" is valid
     
     if not re.match(r'^[A-Z]{2}$', code):
         return "Not a valid format"
@@ -719,46 +722,7 @@ def validate():
                 return None
             
             return "Not a valid format"
-        
-        def validate_phone_numbers(row):
-            """Validate phone and cellphone fields for consistency"""
-            errors = []
-            
-            phone = row.get('phone', '')
-            cellphone = row.get('cellphone', '')
-            country_code = row.get('countrycode', '')
-            
-            # Check if both phone fields are empty
-            if (not phone or phone.strip() == '') and (not cellphone or cellphone.strip() == ''):
-                errors.append("Both phone and cellphone are empty")
-                return errors
-            
-            # Check for duplicate phone numbers
-            if phone and cellphone and phone.strip() == cellphone.strip():
-                errors.append("Phone and cellphone are identical")
-            
-            # Country-specific phone validations
-            if country_code:
-                country_code = country_code.strip().upper()
-                
-                # US phone validation
-                if country_code == 'US':
-                    for phone_field, phone_value in [('phone', phone), ('cellphone', cellphone)]:
-                        if phone_value:
-                            # Remove all non-digits
-                            digits_only = re.sub(r'\D', '', phone_value)
-                            if len(digits_only) not in (10, 11):
-                                errors.append(f"{phone_field} does not match US format")
-                
-                # UK phone validation
-                elif country_code == 'GB':
-                    for phone_field, phone_value in [('phone', phone), ('cellphone', cellphone)]:
-                        if phone_value:
-                            # UK numbers typically start with 0 or +44
-                            if not (phone_value.startswith('0') or '+44' in phone_value or '44' == phone_value[:2]):
-                                errors.append(f"{phone_field} does not match UK format")
-            
-            return errors if errors else None
+
         
         def validate_address_fields(row):
             """Validate address, city, and country for consistency"""

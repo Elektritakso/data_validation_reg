@@ -233,7 +233,7 @@ def is_valid_email(email):
 def validate_currency_code(code):
     """Check if the currency code is a valid format"""
     if code is None or code == '':
-        return "Cannot be NULL or empty"
+        return "Cannot be empty"
     
     code = str(code).strip().upper()
     

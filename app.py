@@ -1028,14 +1028,7 @@ def validate():
                             row_errors.append(f"{code_value} {error_msg}")
                             error_counter[error_msg] += 1
                             is_valid = False
-                
-                # Add cross-field validations
-                phone_errors = validate_phone_numbers(row)
-                if phone_errors:
-                    for error in phone_errors:
-                        row_errors.append(f"{code_value} {error}")
-                        error_counter[error] += 1
-                        is_valid = False
+
                 
                 address_errors = validate_address_fields(row)
                 if address_errors:

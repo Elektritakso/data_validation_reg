@@ -5,11 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CSV Validator</title>
     
-    <!-- Bootstrap CSS -->
+   
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
     
-    <!-- Custom CSS -->
+    
     <style>
         body {
             padding-top: 20px;
@@ -70,7 +70,7 @@
             overflow-x: auto;
         }
         
-        /* Responsive adjustments */
+        
         @media (max-width: 768px) {
             .col-form-label {
                 margin-bottom: 0.5rem;
@@ -85,12 +85,12 @@
             <p class="text-center text-muted">Upload and validate your CSV files</p>
         </header>
         
-        <!-- Error/Alert Container -->
+        
         <div id="error-container"></div>
         
-        <!-- Main Content -->
+        
         <div class="row">
-            <!-- Upload Form -->
+            
             <div class="col-lg-4">
                 <div class="card">
                     <div class="card-header bg-primary text-white">
@@ -161,6 +161,14 @@
                                             <input class="form-check-input required-column" type="checkbox" value="currencycode" id="column-currencycode" checked>
                                             <label class="form-check-label" for="column-currencycode">currencycode</label>
                                         </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input required-column" type="checkbox" value="zip" id="column-zip" checked>
+                                            <label class="form-check-label" for="column-zip">zip</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input required-column" type="checkbox" value="signupdate" id="column-signupdate" checked>
+                                            <label class="form-check-label" for="column-signupdate">signupdate</label>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -172,7 +180,7 @@
                     </div>
                 </div>
                 
-                <!-- Validation Button Card -->
+                
                 <div class="card">
                     <div class="card-header bg-success text-white">
                         <h5 class="mb-0">Validate Data</h5>
@@ -186,9 +194,9 @@
                 </div>
             </div>
             
-            <!-- Results Area -->
+           
             <div class="col-lg-8">
-                <!-- Column Mapping Card (initially hidden) -->
+                
                 <div id="column-mapping-card" class="card" style="display: none;">
                     <div class="card-header bg-info text-white">
                         <h5 class="mb-0">Column Mapping</h5>
@@ -196,7 +204,7 @@
                     <div class="card-body">
                         <p>Map your CSV columns to the required fields:</p>
                         <div id="column-mappings-container">
-                            <!-- Mapping rows will be added here dynamically -->
+                            
                         </div>
                         <button id="add-mapping-button" class="btn btn-outline-secondary mt-2">
                             <i class="bi bi-plus-circle"></i> Add Mapping
@@ -204,17 +212,17 @@
                     </div>
                 </div>
                 
-                <!-- File Info -->
+                
                 <div id="file-info"></div>
                 
-                <!-- Loading Indicator -->
+                
                 <div id="loading-indicator" class="loading-indicator d-none">
                     <div class="spinner-border text-primary" role="status">
                         <span class="visually-hidden">Loading...</span>
                     </div>
                 </div>
                 
-                <!-- Preview Table -->
+               
                 <div class="card">
                     <div class="card-header bg-secondary text-white">
                         <h5 class="mb-0">Data Preview</h5>
@@ -226,7 +234,7 @@
                     </div>
                 </div>
                 
-                <!-- Validation Results -->
+                
                 <div id="validation-results"></div>
             </div>
         </div>
@@ -236,10 +244,10 @@
         </footer>
     </div>
     
-    <!-- Bootstrap JS Bundle with Popper -->
+    
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     
-    <!-- Custom JavaScript -->
+    
     <script src="{{ url_for('static', filename='js/script.js') }}"></script>
 </body>
 </html>

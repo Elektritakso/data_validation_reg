@@ -11,6 +11,8 @@ import tempfile
 import logging
 from collections import Counter
 import json
+from dateutil.relativedelta import relativedelta
+
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 2048 * 1024 * 1024 
@@ -246,7 +248,7 @@ def is_invalid_birthdate(birthdate_str, age_limit=18):
     birthdate_str = str(birthdate_str).strip()
     
     # Try multiple date formats
-    date_formats = ['%m/%d/%Y', '%d/%m/%Y', '%Y-%m-%d', '%m-%d-%Y', '%d-%m-%Y']
+    date_formats = ['%d/%m/%Y', '%Y-%m-%d', '%m/%d/%Y', '%m-%d-%Y', '%d-%m-%Y']
     
     for date_format in date_formats:
         try:
@@ -257,10 +259,9 @@ def is_invalid_birthdate(birthdate_str, age_limit=18):
             if birthdate > today:
                 return "Birthdate is in the future"
             
-            # Calculate age
-            age = today.year - birthdate.year
-            if (today.month, today.day) < (birthdate.month, birthdate.day):
-                age -= 1
+            # Calculate age using relativedelta for more accuracy
+            age_delta = relativedelta(today, birthdate)
+            age = age_delta.years
             
             # Check if underage
             if age < age_limit:
@@ -633,7 +634,7 @@ def validate():
         if not required_columns:
             required_columns = ['code', 'firstname', 'lastname', 'email',
                             'birthdate', 'address', 'city', 'phone', 'cellphone',
-                            'countrycode', 'signuplanguagecode']
+                            'countrycode', 'signuplanguagecode', 'username']
         
         # Convert to lowercase for case-insensitive comparison
         required_columns_lower = [col.lower() for col in required_columns]
@@ -722,6 +723,79 @@ def validate():
                 return None
             
             return "Not a valid format"
+        
+        # First, ensure the validate_zip_code function is complete
+        def validate_zip_code(zip_code, country_code=None):
+            """
+            Validate zip/postal code format based on country code if provided
+            
+            Args:
+                zip_code: The zip/postal code to validate
+                country_code: Optional country code to apply country-specific validation
+                
+            Returns:
+                Error message if invalid, None if valid
+            """
+            if zip_code is None or zip_code == '':
+                return "Zip/postal code is empty"
+            
+            zip_code = str(zip_code).strip()
+            
+            # If country code is provided, apply country-specific validation
+            if country_code:
+                country_code = str(country_code).strip().upper()
+                
+                # US ZIP code validation (5 digits or ZIP+4 format)
+                if country_code == 'US':
+                    if not re.match(r'^\d{5}(?:-\d{4})?$', zip_code):
+                        return "Invalid US ZIP code format (should be 5 digits or ZIP+4)"
+                
+                # Canadian postal code validation (A1A 1A1 format)
+                elif country_code == 'CA':
+                    # Remove spaces for validation
+                    zip_no_spaces = zip_code.replace(' ', '')
+                    if not re.match(r'^[A-Za-z]\d[A-Za-z]\d[A-Za-z]\d$', zip_no_spaces):
+                        return "Invalid Canadian postal code format"
+                
+                # UK postal code validation
+                elif country_code == 'GB':
+                    if not re.match(r'^[A-Z]{1,2}[0-9][A-Z0-9]? ?[0-9][A-Z]{2}$', zip_code.upper()):
+                        return "Invalid UK postal code format"
+                
+                # Australian postal code validation (4 digits)
+                elif country_code == 'AU':
+                    if not re.match(r'^\d{4}$', zip_code):
+                        return "Invalid Australian postal code format (should be 4 digits)"
+                
+                # German postal code validation (5 digits)
+                elif country_code == 'DE':
+                    if not re.match(r'^\d{5}$', zip_code):
+                        return "Invalid German postal code format (should be 5 digits)"
+                
+                # French postal code validation (5 digits)
+                elif country_code == 'FR':
+                    if not re.match(r'^\d{5}$', zip_code):
+                        return "Invalid French postal code format (should be 5 digits)"
+                
+                # Italian postal code validation (5 digits)
+                elif country_code == 'IT':
+                    if not re.match(r'^\d{5}$', zip_code):
+                        return "Invalid Italian postal code format (should be 5 digits)"
+                
+                # Spanish postal code validation (5 digits)
+                elif country_code == 'ES':
+                    if not re.match(r'^\d{5}$', zip_code):
+                        return "Invalid Spanish postal code format (should be 5 digits)"
+                
+                # For other countries, just check if it's not empty (already done above)
+            
+            # Generic validation for zip codes without country-specific rules
+            # Check if it contains only alphanumeric characters, spaces, and hyphens
+            if not re.match(r'^[A-Za-z0-9\s-]+$', zip_code):
+                return "Zip/postal code contains invalid characters"
+            
+            return None
+
 
         
         def validate_address_fields(row):
@@ -731,14 +805,7 @@ def validate():
             address = row.get('address', '')
             city = row.get('city', '')
             country_code = row.get('countrycode', '')
-            
-            # Check if address is empty but city is not
-            if (not address or address.strip() == '') and city and city.strip() != '':
-                errors.append("Address is empty but city is provided")
-            
-            # Check if city is empty but address is not
-            if (not city or city.strip() == '') and address and address.strip() != '':
-                errors.append("City is empty but address is provided")
+
             
             # Check for PO Box addresses
             #if address and re.search(r'p\.?o\.?\s*box', address.lower()):
@@ -1010,6 +1077,21 @@ def validate():
                             row_errors.append(f"{code_value} {error_msg}")
                             error_counter[error_msg] += 1
                             is_valid = False
+
+                    elif field_lower in ['zipcode', 'postalcode', 'zip', 'postcode']:
+    # Get country code if available for country-specific validation
+                        country_code = None
+                        for key, value in row.items():
+                            if key and key.lower() == 'countrycode':
+                                country_code = value
+                                break
+                        
+                        zip_error = validate_zip_code(value, country_code)
+                        if zip_error:
+                            error_msg = f"{field}: {zip_error}"
+                            row_errors.append(f"{code_value} {error_msg}")
+                            error_counter[error_msg] += 1
+                            is_valid = False
                     
                     # Language code validation (updated to support formats like EN-GB)
                     elif field_lower == 'signuplanguagecode':
@@ -1074,7 +1156,7 @@ def validate():
             'error_counts': error_counts_sorted,
             'duplicate_email_count': duplicate_email_count,
             'duplicate_username_count': duplicate_username_count,
-            'results': validation_results[:10],
+            'results': validation_results[:100000],
             'all_columns': all_columns,
             'required_columns': required_columns,
             'column_mappings': column_mappings  # Include the column mappings in the response

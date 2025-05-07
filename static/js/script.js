@@ -22,9 +22,9 @@ let state = {
     fileData: null,
     availableSourceColumns: [],
     expectedTargetFields: [
-        'code', 'firstname', 'lastname', 'email', 'birthdate', 
+        'code', 'username','firstname', 'lastname', 'email', 'birthdate', 
         'address', 'city', 'phone', 'cellphone', 'countrycode', 
-        'signuplanguagecode', 'currencycode'
+        'signuplanguagecode', 'currencycode', 'zip'
     ]
 };
 

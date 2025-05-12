@@ -633,19 +633,7 @@ def validate():
                 return f"{field_name} exceeds maximum length of {max_length} characters"
             
             return None
-        
-
-        def validate_password(password):
-            """Validate that the password is not NULL and does not exceed 500 characters."""
-            if password is None or password == '':
-                return "Password cannot be NULL or empty"
             
-            password = str(password).strip()
-            
-            if len(password) > 500:
-                return "Password exceeds maximum length of 500 characters"
-            
-            return None
         
         def validate_language_code(code):
             """Check if the language code is a valid format"""
@@ -988,13 +976,6 @@ def validate():
                             error_msg = f"currencycode: {currency_error}"
                             row_errors.append(f"{code_value} {error_msg}")
                             error_counter[error_msg] += 1
-                            is_valid = False
-
-                    elif 'password' in row:
-                        password_error = validate_password(row['password'])
-                        if password_error:
-                            row_errors.append(f"{code_value} {password_error}")
-                            error_counter[password_error] += 1
                             is_valid = False
 
                 

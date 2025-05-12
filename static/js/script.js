@@ -18,7 +18,7 @@ let state = {
     expectedTargetFields: [
         'code', 'username','firstname', 'lastname', 'email', 'birthdate', 
         'address', 'city', 'phone', 'cellphone', 'countrycode', 
-        'signuplanguagecode', 'currencycode', 'zip', 'signupdate', 'password'
+        'signuplanguagecode', 'currencycode', 'zip', 'signupdate'
     ]
 };
 

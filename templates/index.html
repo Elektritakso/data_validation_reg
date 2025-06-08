@@ -3,251 +3,70 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Data Validator</title>
-    
-   
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
-    
-    
-    <style>
-        body {
-            padding-top: 20px;
-            padding-bottom: 40px;
-            background-color: #f8f9fa;
-        }
-        
-        .container {
-            max-width: 1200px;
-        }
-        
-        .card {
-            margin-bottom: 20px;
-            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
-        }
-        
-        .card-header {
-            font-weight: 500;
-        }
-        
-        .loading-indicator {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-        }
-        
-        .spinner-border {
-            width: 3rem;
-            height: 3rem;
-        }
-        
-        .validation-summary {
-            margin-top: 20px;
-        }
-        
-        .mapping-row {
-            align-items: center;
-        }
-        
-        .required-columns-container {
-            max-height: 300px;
-            overflow-y: auto;
-        }
-        
-        .file-input-container {
-            position: relative;
-        }
-        
-        .file-input-label {
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            cursor: pointer;
-        }
-        
-        .preview-container {
-            overflow-x: auto;
-        }
-        
-        
-        @media (max-width: 768px) {
-            .col-form-label {
-                margin-bottom: 0.5rem;
-            }
-        }
-    </style>
+    <title>Validator</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.3/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-    <div class="container">
-        <header class="mb-4">
-            <h1 class="text-center">Data Validator</h1>
-            <p class="text-center text-muted">Upload and validate your data files</p>
-        </header>
-        
+    <div class="container mt-4 mb-5">
+        <h1 class="mb-4">Data Validator</h1>
         
         <div id="error-container"></div>
         
+        <!-- Regulation selector will be inserted here by JavaScript -->
         
-        <div class="row">
-            
-            <div class="col-lg-4">
-                <div class="card">
-                    <div class="card-header bg-primary text-white">
-                        <h5 class="mb-0">Upload File</h5>
-                    </div>
-                    <div class="card-body">
-                        <form id="upload-form" enctype="multipart/form-data">
-                            <div class="mb-3">
-                                <label for="file-input" class="form-label">Select File</label>
-                                <div class="file-input-container">
-                                    <input type="file" class="form-control" id="file-input" accept=".csv,.txt">
-                                </div>
-                            </div>
-                            
-                            <div class="mb-3">
-                                <label class="form-label">Required Columns</label>
-                                <div class="card">
-                                    <div class="card-body p-2 required-columns-container">
-                                        <div class="form-check">
-                                            <input class="form-check-input required-column" type="checkbox" value="code" id="column-code" checked>
-                                            <label class="form-check-label" for="column-code">code</label>
-                                        </div>
-                                        <div class="form-check">
-                                            <input class="form-check-input required-column" type="checkbox" value="username" id="column-username" checked>
-                                            <label class="form-check-label" for="column-username">username</label>
-                                        </div>
-                                        <div class="form-check">
-                                            <input class="form-check-input required-column" type="checkbox" value="firstname" id="column-firstname" checked>
-                                            <label class="form-check-label" for="column-firstname">firstname</label>
-                                        </div>
-                                        <div class="form-check">
-                                            <input class="form-check-input required-column" type="checkbox" value="lastname" id="column-lastname" checked>
-                                            <label class="form-check-label" for="column-lastname">lastname</label>
-                                        </div>
-                                        <div class="form-check">
-                                            <input class="form-check-input required-column" type="checkbox" value="email" id="column-email" checked>
-                                            <label class="form-check-label" for="column-email">email</label>
-                                        </div>
-                                        <div class="form-check">
-                                            <input class="form-check-input required-column" type="checkbox" value="birthdate" id="column-birthdate" checked>
-                                            <label class="form-check-label" for="column-birthdate">birthdate</label>
-                                        </div>
-                                        <div class="form-check">
-                                            <input class="form-check-input required-column" type="checkbox" value="address" id="column-address" checked>
-                                            <label class="form-check-label" for="column-address">address</label>
-                                        </div>
-                                        <div class="form-check">
-                                            <input class="form-check-input required-column" type="checkbox" value="city" id="column-city" checked>
-                                            <label class="form-check-label" for="column-city">city</label>
-                                        </div>
-                                        <div class="form-check">
-                                            <input class="form-check-input required-column" type="checkbox" value="phone" id="column-phone" checked>
-                                            <label class="form-check-label" for="column-phone">phone</label>
-                                        </div>
-                                        <div class="form-check">
-                                            <input class="form-check-input required-column" type="checkbox" value="cellphone" id="column-cellphone" checked>
-                                            <label class="form-check-label" for="column-cellphone">cellphone</label>
-                                        </div>
-                                        <div class="form-check">
-                                            <input class="form-check-input required-column" type="checkbox" value="countrycode" id="column-countrycode" checked>
-                                            <label class="form-check-label" for="column-countrycode">countrycode</label>
-                                        </div>
-                                        <div class="form-check">
-                                            <input class="form-check-input required-column" type="checkbox" value="signuplanguagecode" id="column-signuplanguagecode" checked>
-                                            <label class="form-check-label" for="column-signuplanguagecode">signuplanguagecode</label>
-                                        </div>
-                                        <div class="form-check">
-                                            <input class="form-check-input required-column" type="checkbox" value="currencycode" id="column-currencycode" checked>
-                                            <label class="form-check-label" for="column-currencycode">currencycode</label>
-                                        </div>
-                                        <div class="form-check">
-                                            <input class="form-check-input required-column" type="checkbox" value="zip" id="column-zip" checked>
-                                            <label class="form-check-label" for="column-zip">zip</label>
-                                        </div>
-                                        <div class="form-check">
-                                            <input class="form-check-input required-column" type="checkbox" value="signupdate" id="column-signupdate" checked>
-                                            <label class="form-check-label" for="column-signupdate">signupdate</label>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div class="d-grid">
-                                <button type="submit" class="btn btn-primary">Upload File</button>
-                            </div>
-                        </form>
-                    </div>
+        <div id="upload-form-container">
+            <div class="card mb-4" id="upload-form">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Upload CSV File</h5>
                 </div>
-                
-                
-                <div class="card">
-                    <div class="card-header bg-success text-white">
-                        <h5 class="mb-0">Validate Data</h5>
-                    </div>
-                    <div class="card-body">
-                        <p>After uploading your file, click the button below to validate the data.</p>
-                        <div class="d-grid">
-                            <button id="validate-button" class="btn btn-success" disabled>Validate Data</button>
+                <div class="card-body">
+                    <form id="upload-form" enctype="multipart/form-data">
+                        <div class="mb-3">
+                            <label for="file-input" class="form-label">Select CSV file:</label>
+                            <input type="file" class="form-control" id="file-input" accept=".csv">
                         </div>
-                    </div>
+                        <button type="submit" class="btn btn-primary">Upload</button>
+                    </form>
                 </div>
-            </div>
-            
-           
-            <div class="col-lg-8">
-                
-                <div id="column-mapping-card" class="card" style="display: none;">
-                    <div class="card-header bg-info text-white">
-                        <h5 class="mb-0">Column Mapping</h5>
-                    </div>
-                    <div class="card-body">
-                        <p>Map your columns to the required fields:</p>
-                        <div id="column-mappings-container">
-                            
-                        </div>
-                        <button id="add-mapping-button" class="btn btn-outline-secondary mt-2">
-                            <i class="bi bi-plus-circle"></i> Add Mapping
-                        </button>
-                    </div>
-                </div>
-                
-                
-                <div id="file-info"></div>
-                
-                
-                <div id="loading-indicator" class="loading-indicator d-none">
-                    <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden">Loading...</span>
-                    </div>
-                </div>
-                
-               
-                <div class="card">
-                    <div class="card-header bg-secondary text-white">
-                        <h5 class="mb-0">Data Preview</h5>
-                    </div>
-                    <div class="card-body preview-container">
-                        <div id="preview-table">
-                            <p class="text-muted text-center">Upload a file to see data preview</p>
-                        </div>
-                    </div>
-                </div>
-                
-                
-                <div id="validation-results"></div>
             </div>
         </div>
         
-        <footer class="mt-5 text-center text-muted">
-            <p>Data Validator &copy; 2025</p>
-        </footer>
+        <div id="loading-indicator" class="d-none text-center my-4">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2">Processing your file...</p>
+        </div>
+        
+        <div id="file-info"></div>
+        
+        <div class="card mb-4" id="column-mapping-card" style="display: none;">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">Column Mapping</h5>
+            </div>
+            <div class="card-body">
+                <p>Map your CSV columns to the required fields:</p>
+                <div id="column-mappings-container"></div>
+                <button id="add-mapping-button" class="btn btn-outline-secondary mt-2">
+                    <i class="bi bi-plus-circle"></i> Add Mapping
+                </button>
+            </div>
+        </div>
+        
+        <div id="preview-table"></div>
+        
+        <div class="text-center my-4">
+            <button id="validate-button" class="btn btn-success btn-lg" disabled>
+                <i class="bi bi-check-circle"></i> Validate Data
+            </button>
+        </div>
+        
+        <div id="validation-results"></div>
     </div>
     
-    
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    
-    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{{ url_for('static', filename='js/script.js') }}"></script>
 </body>
 </html>

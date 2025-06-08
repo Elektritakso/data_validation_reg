@@ -13,6 +13,15 @@ from collections import Counter
 import json
 from dateutil.relativedelta import relativedelta
 
+# Import the validators
+from validators import (
+    is_valid_email, validate_currency_code, is_invalid_birthdate,
+    validate_phone_number, check_for_crlf, validate_country_code,
+    validate_language_code, validate_placeholder, validate_name,
+    validate_signup_date, validate_name_length, validate_zip_code,
+    validate_address_fields, validate_language_country_consistency,
+    enhanced_email_validation
+)
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 2048 * 1024 * 1024 
@@ -23,6 +32,36 @@ TEMP_FOLDER = os.path.join(tempfile.gettempdir(), 'csv_validator')
 os.makedirs(TEMP_FOLDER, exist_ok=True)
 
 ALLOWED_EXTENSIONS = {'csv'}
+
+REGULATIONS = {
+    "CO": {
+        "name": "Columbia",
+        "required_fields": ["firstname", "lastname", 
+                            "email", "birthdate", "address",
+                            "city", "countrycode", "zip", "cellphone",
+                            "phone", "gender", "username",
+                            "birthdate", "citizenship", "regioncode",
+                            "provincecode", "province", "personalid", 
+                            "idcardno", "passportid", "driverslicenseno", 
+                            "birthcity", "birthcountrycode", "firstname", 
+                            "firstsurname", "secondsurname", "secondfirstname" ],
+        "validations": {
+            "birthdate": {"min_age": 18},
+            "email": {"required": True},
+            "countrycode": {"pattern": "^[A-Z]{2}$"}
+        }
+    },
+    "IMS": {
+        "name": "Basic",
+        "required_fields": ["email", "firstname", "lastname"],
+        "validations": {
+            "email": {"required": True}
+        }
+    }
+}
+
+# Enable regulations feature
+ENABLE_REGULATIONS = True
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -151,39 +190,6 @@ def check_duplicate_emails(data):
     
     return duplicate_emails
 
-def validate_signup_date(date_str):
-    """
-    Validate that a signup date is not in the future
-    
-    Args:
-        date_str: The date string to validate
-        
-    Returns:
-        Error message if invalid, None if valid
-    """
-    if date_str is None or date_str == '':
-        return None  
-    
-    date_str = str(date_str).strip()
-    
-    date_formats = ['%d/%m/%Y', '%Y-%m-%d', '%m/%d/%Y', '%m-%d-%Y', '%d-%m-%Y']
-    
-    for date_format in date_formats:
-        try:
-            signup_date = datetime.strptime(date_str, date_format)
-            today = datetime.today()
-            
-            if signup_date > today:
-                return "Signup date cannot be in the future"
-            
-            return None
-            
-        except ValueError:
-            continue
-    
-    return f"Invalid signup date format: '{date_str}'"
-
-
 def check_duplicate_usernames(data):
     """
     Check for duplicate usernames in the data
@@ -214,155 +220,42 @@ def check_duplicate_usernames(data):
     
     return duplicate_usernames
 
-
-def is_valid_email(email):
-    """Check if the email has a valid format"""
-    if email is None or email == '':
-        return "Email is empty"
-    
-    email = str(email).strip()
-    
-    if '@' not in email:
-        return "Email missing @ symbol"
-    
-    if not re.match(r'^[a-zA-Z0-9._%+-áéíóúñÁÉÍÓÚÑ$]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email):
-        return "Email has invalid format"
-    
-    return None
-
-def validate_currency_code(code):
-    """Check if the currency code is a valid format"""
-    if code is None or code == '':
-        return "Cannot be empty"
-    
-    code = str(code).strip().upper()
-    
-    if not re.match(r'^[A-Z]{3}$', code):
-        return "Not a valid format (should be 3 uppercase letters)"
-    
-    return None
-
-
-def is_invalid_birthdate(birthdate_str, age_limit=18):
-    """Check if birthdate is invalid or represents someone underage"""
-    if birthdate_str is None or birthdate_str == '':
-        return "Birthdate is empty"
-    
-    birthdate_str = str(birthdate_str).strip()
-    
-    date_formats = ['%d/%m/%Y'] # kas siin peaks formaate juurde lisama ?
-    
-    for date_format in date_formats:
-        try:
-            birthdate = datetime.strptime(birthdate_str, date_format)
-            today = datetime.today()
-            
-            if birthdate > today:
-                return "Birthdate is in the future"
-            
-            age_delta = relativedelta(today, birthdate)
-            age = age_delta.years
-            
-            if age < age_limit:
-                return f"Account holder is underage (age: {age})"
-            
-            return None
-            
-        except ValueError:
-            continue
-    
-    return f"Invalid birthdate format: '{birthdate_str}'"
-
-def validate_phone_number(phone):
-    """Check if the phone number contains only digits and optional + sign"""
-    if phone is None or phone == '':
-        return None
-    
-    phone = str(phone).strip()
-    
-    if ' ' in phone:
-        return "Phone contains spaces"
-    
-    if not re.match(r'^[\d+]*$', phone):
-        return "Phone contains invalid characters"
-    
-    return None
-
-def check_for_crlf(text):
-    """Check if text contains CRLF characters"""
-    if text is None or text == '':
-        return None
-    
-    text = str(text)
-    if re.search(r'\r\n', text):
-        return "Contains CRLF characters"
-    
-    return None
-
-def validate_country_code(code):
-    """Check if the country code is a valid format"""
-    if code is None or code == '':
-        return "Cannot be empty" 
-    
-    code = str(code).strip().upper()
-
-    if code == "00":
-        return None  # "00" on meil default vist?
-    
-    if not re.match(r'^[A-Z]{2}$', code):
-        return "Not a valid format"
-    
-    return None
-
-def validate_language_code(code):
-    """Check if the language code is a valid format"""
-    if code is None or code == '':
-        return "Cannot be empty"  
-    
-    code = str(code).strip().lower()
-    
-    if re.match(r'^[a-zA-Z]{2}$', code):
-        return None
-    
-    if re.match(r'^[a-zA-Z]{2}-[a-zA-Z]{2}$', code):
-        return None
-
-    return "Not a valid format"
-def validate_placeholder(value):
-    """Check if a value is just a placeholder (-)"""
-    if value == '-':
-        return "Contains only placeholder '-'"
-    return None
-
-def validate_name(name, field):
-    """Validate person names for common issues"""
-    if name is None or name == '':
-        return f"{field} is empty"
-        
-    name = str(name).strip()
-    
-    placeholders = ['-', 'n/a', 'na', 'none', 'unknown', 'test', 'user']
-    if name.lower() in placeholders:
-        return f"{field} contains placeholder value"
-        
-    if re.search(r'\d', name):
-        return f"{field} contains numbers"
-        
-    if len(re.findall(r'[^\w\s]', name)) > 2:
-        return f"{field} contains too many special characters"
-        
-    if len(name) < 2:
-        return f"{field} is too short"
-        
-    if len(name) > 50:
-        return f"{field} is too long"
-        
-    return None
-
 @app.route('/')
 def index():
     """Render the form page"""
     return render_template('index.html')
+
+@app.route('/regulations', methods=['GET'])
+def get_regulations():
+    """Get all available regulations"""
+    if not ENABLE_REGULATIONS:
+        return jsonify({'error': 'Regulations feature is disabled'}), 404
+    
+    return jsonify({
+        'regulations': {code: reg["name"] for code, reg in REGULATIONS.items()}
+    })
+
+@app.route('/regulation-fields/<regulation_code>', methods=['GET'])
+def get_regulation_fields(regulation_code):
+    """Get required fields for a specific regulation"""
+    if not ENABLE_REGULATIONS:
+        return jsonify({'error': 'Regulations feature is disabled'}), 404
+    
+    regulation = REGULATIONS.get(regulation_code)
+    if not regulation:
+        return jsonify({'error': f'Regulation {regulation_code} not found'}), 404
+    
+    response = {
+        'regulation': regulation_code,
+        'name': regulation['name'],
+        'required_fields': regulation['required_fields']
+    }
+    
+    # Add is_custom flag if present
+    if 'is_custom' in regulation:
+        response['is_custom'] = regulation['is_custom']
+    
+    return jsonify(response)
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
@@ -529,9 +422,6 @@ def upload_file():
         app.logger.error(traceback.format_exc())
         return jsonify({'error': f'Error processing file: {str(e)}'}), 500
 
-
-
-
 @app.route('/validate', methods=['POST'])
 def validate():
     """Validate data from the stored file - only checking specified columns"""
@@ -564,7 +454,20 @@ def validate():
                 if chunk:  
                     yield chunk
         
-        if request.json and 'required_columns' in request.json:
+        # Get the selected regulation
+        selected_regulation = None
+        if request.json and 'regulation' in request.json:
+            regulation_key = request.json['regulation']
+            if regulation_key in REGULATIONS:
+                selected_regulation = REGULATIONS[regulation_key]
+                app.logger.info(f"Using regulation: {regulation_key}")
+        
+        # If regulation is selected, use its required fields
+        if selected_regulation:
+            required_columns = selected_regulation.get('required_fields', [])
+            session['required_columns'] = required_columns
+            app.logger.info(f"Using regulation-specific required columns: {required_columns}")
+        elif request.json and 'required_columns' in request.json:
             required_columns = request.json['required_columns']
             session['required_columns'] = required_columns
             app.logger.info(f"Using required columns from request: {required_columns}")
@@ -621,187 +524,6 @@ def validate():
         
         validation_results = []
         row_idx = 0
-        
-        def validate_name_length(name, field_name, max_length=50):
-            """Validate that a name field doesn't exceed the maximum length"""
-            if name is None or name == '':
-                return None  
-            
-            name = str(name).strip()
-            
-            if len(name) > max_length:
-                return f"{field_name} exceeds maximum length of {max_length} characters"
-            
-            return None
-            
-        
-        def validate_language_code(code):
-            """Check if the language code is a valid format"""
-            if code is None or code == '':
-                return "Cannot be empty"  
-            
-            code = str(code).strip()
-            
-            if re.match(r'^[a-zA-Z]{2}$', code):
-                return None
-            
-            if re.match(r'^[a-zA-Z]{2}-[a-zA-Z]{2}$', code):
-                return None
-            
-            return "Not a valid format"
-        
-        def validate_zip_code(zip_code, country_code=None):
-            """
-            Validate zip/postal code format based on country code if provided
-            
-            Args:
-                zip_code: The zip/postal code to validate
-                country_code: Optional country code to apply country-specific validation
-                
-            Returns:
-                Error message if invalid, None if valid
-            """
-            if zip_code is None or zip_code == '':
-                return "Zip/postal code is empty"
-            
-            zip_code = str(zip_code).strip()
-            
-            if country_code:
-                country_code = str(country_code).strip().upper()
-                
-                if country_code == 'US':
-                    if not re.match(r'^\d{5}(?:-\d{4})?$', zip_code):
-                        return "Invalid US ZIP code format (should be 5 digits or ZIP+4)"
-                
-                elif country_code == 'CA':
-                    # Remove spaces for validation
-                    zip_no_spaces = zip_code.replace(' ', '')
-                    if not re.match(r'^[A-Za-z]\d[A-Za-z]\d[A-Za-z]\d$', zip_no_spaces):
-                        return "Invalid Canadian postal code format"
-                
-                elif country_code == 'GB':
-                    if not re.match(r'^[A-Z]{1,2}[0-9][A-Z0-9]? ?[0-9][A-Z]{2}$', zip_code.upper()):
-                        return "Invalid UK postal code format"
-                
-                elif country_code == 'AU':
-                    if not re.match(r'^\d{4}$', zip_code):
-                        return "Invalid Australian postal code format (should be 4 digits)"
-                
-                elif country_code == 'DE':
-                    if not re.match(r'^\d{5}$', zip_code):
-                        return "Invalid German postal code format (should be 5 digits)"
-                
-                elif country_code == 'FR':
-                    if not re.match(r'^\d{5}$', zip_code):
-                        return "Invalid French postal code format (should be 5 digits)"
-                
-                elif country_code == 'IT':
-                    if not re.match(r'^\d{5}$', zip_code):
-                        return "Invalid Italian postal code format (should be 5 digits)"
-                
-                elif country_code == 'ES':
-                    if not re.match(r'^\d{5}$', zip_code):
-                        return "Invalid Spanish postal code format (should be 5 digits)"
-
-            if not re.match(r'^[A-Za-z0-9\s-]+$', zip_code):
-                return "Zip/postal code contains invalid characters"
-            
-            return None
-
-
-        
-        def validate_address_fields(row):
-            """Validate address, city"""
-            errors = []
-            
-            address = row.get('address', '')
-            city = row.get('city', '')
-            country_code = row.get('countrycode', '')
-
-            if address:
-                if len(address) < 2:
-                    errors.append("Address is too short (minimum 2 characters)")
-                elif len(address) > 640:
-                    errors.append("Address is too long (maximum 640 characters)")
-            
-            if city:
-                if len(city) < 2:
-                    errors.append("City name is too short (minimum 2 characters)")
-                elif len(city) > 50:
-                    errors.append("City name is too long (maximum 50 characters)")
-            
-            # Check for common test addresses
-            #test_addresses = ['123 main', 'test address', '123 test', 'main street']
-            #if address and any(test_addr in address.lower() for test_addr in test_addresses):
-                #errors.append("Address appears to be a test/placeholder")
-            
-            if country_code:
-                country_code = country_code.strip().upper()
-            
-            return errors if errors else None
-        
-        def validate_language_country_consistency(row):
-            """Check if language code is consistent with country code"""
-            return None
-            
-            language_code = row.get('signuplanguagecode', '')
-            country_code = row.get('countrycode', '')
-            
-            if not language_code or not country_code:
-                return None
-            
-            base_language = language_code.strip().lower().split('-')[0]
-            country_code = country_code.strip().upper()
-            
-            country_language_map = {
-                'US': ['en'],
-                'GB': ['en'],
-                'CA': ['en', 'fr'],
-                'FR': ['fr'],
-                'DE': ['de'],
-                'ES': ['es'],
-                'IT': ['it'],
-                'PT': ['pt'],
-                'BR': ['pt'],
-                'MX': ['es'],
-                'JP': ['ja'],
-                'CN': ['zh'],
-                'RU': ['ru']
-            }
-            
-            if country_code in country_language_map:
-                expected_languages = country_language_map[country_code]
-                if base_language not in expected_languages:
-                    errors.append(f"Language code '{language_code}' unusual for country '{country_code}'")
-            
-            return errors if errors else None
-        
-        def enhanced_email_validation(email):
-            """Enhanced validation for email addresses"""
-            basic_error = is_valid_email(email)
-            if basic_error:
-                return basic_error
-            
-            email = str(email).strip().lower()
-            
-            disposable_domains = [
-                'mailinator.com', 'yopmail.com', 'tempmail.com', 'guerrillamail.com',
-                'temp-mail.org', 'fakeinbox.com', 'sharklasers.com', 'trashmail.com',
-                'mailnesia.com', '10minutemail.com', 'tempinbox.com', 'dispostable.com'
-            ]
-            
-            domain = email.split('@')[-1]
-            if domain in disposable_domains:
-                return f"Email uses disposable domain: {domain}"
-            
-            test_patterns = [
-                r'^test', r'test@', r'example@', r'user@', r'sample@',
-                r'@example\.', r'@test\.', r'@localhost'
-            ]
-            
-            for pattern in test_patterns:
-                if re.search(pattern, email):
-                    return "Email appears to be a test address"
         
         for chunk in read_csv_in_chunks(file_path, file_info['delimiter'], chunk_size):
             mapped_chunk = []
@@ -1029,3 +751,4 @@ def validate():
 
 if __name__ == '__main__':
     app.run(debug=True)
+

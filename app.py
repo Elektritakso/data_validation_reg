@@ -20,7 +20,7 @@ from validators import (
     validate_language_code, validate_placeholder, validate_name,
     validate_signup_date, validate_name_length, validate_zip_code,
     validate_address_fields, validate_language_country_consistency,
-    enhanced_email_validation
+    enhanced_email_validation, validate_citizenship
 )
 
 app = Flask(__name__)
@@ -48,7 +48,24 @@ REGULATIONS = {
         "validations": {
             "birthdate": {"min_age": 18},
             "email": {"required": True},
-            "countrycode": {"pattern": "^[A-Z]{2}$"}
+            "countrycode": {"pattern": "^[A-Z]{2}$"},
+            "gender": {"values": ["M", "F"]},
+            "citizenship": {"required": True, "pattern": "^[A-Z]{2}$"},
+            "regioncode": {"pattern": "^[A-Z0-9]{1,5}$"},
+            "provincecode": {"pattern": "^[A-Z0-9]{1,5}$"},
+            "province": {"required": True, "max_length": 50},
+            "personalid": {"pattern": "^[A-Z0-9]{5,15}$"},
+            "idcardno": {"pattern": "^[0-9]{6,12}$"},
+            "passportid": {"pattern": "^[A-Z0-9]{6,12}$"},
+            "driverslicenseno": {"pattern": "^[A-Z0-9]{6,15}$"},
+            "birthcity": {"required": True, "max_length": 50},
+            "birthcountrycode": {"pattern": "^[A-Z]{2}$"},
+            "firstsurname": {"required": True, "max_length": 50},
+            "secondsurname": {"max_length": 50},
+            "secondfirstname": {"max_length": 50},
+            "cellphone": {"pattern": "^[0-9+]{7,15}$"},
+            "phone": {"pattern": "^[0-9+]{7,15}$"},
+            "zip": {"pattern": "^[0-9]{5,8}$"}
         }
     },
     "IMS": {
@@ -630,6 +647,14 @@ def validate():
                         if length_error:
                             row_errors.append(f"{code_value} {length_error}")
                             error_counter[length_error] += 1
+                            is_valid = False
+
+                    elif field_lower == 'citizenship':
+                        citizenship_error = validate_citizenship(value)
+                        if citizenship_error:
+                            error_msg f"citizenship: {citizenship_error}"
+                            row_errors.append(f"{code_value} {error_msg}")
+                            error_counter[error_msg] += 1
                             is_valid = False
 
                     elif field_lower == 'signupdate':

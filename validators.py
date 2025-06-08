@@ -149,6 +149,18 @@ def validate_name(name, field):
         
     return None
 
+def validate_citizenship(value):
+    """Validate citizenship field"""
+    if value is None or value == '':
+        return "Citizenship required"
+    
+    value = str(value).strip().upper()
+
+    if not re.match(r'^[A-Z]{2}$', value):
+        return "Citizenship must be 2 letter countrycode"
+    
+    return None
+
 def validate_signup_date(date_str):
     """
     Validate that a signup date is not in the future

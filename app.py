@@ -20,7 +20,7 @@ from validators import (
     validate_language_code, validate_placeholder, validate_name,
     validate_signup_date, validate_name_length, validate_zip_code,
     validate_address_fields, validate_language_country_consistency,
-    enhanced_email_validation, validate_citizenship
+    enhanced_email_validation, validate_citizenship, validate_regioncode, validate_provincecode
 )
 
 app = Flask(__name__)
@@ -51,8 +51,8 @@ REGULATIONS = {
             "countrycode": {"pattern": "^[A-Z]{2}$"},
             "gender": {"values": ["M", "F"]},
             "citizenship": {"required": True, "pattern": "^[A-Z]{2}$"},
-            "regioncode": {"pattern": "^[A-Z0-9]{1,5}$"},
-            "provincecode": {"pattern": "^[A-Z0-9]{1,5}$"},
+            "regioncode": {"required": True, "pattern": "^[0-9]{1,20}$"},
+            "provincecode": {"required": True, "pattern": "^[0-9]{1,20}$"},
             "province": {"required": True, "max_length": 50},
             "personalid": {"pattern": "^[A-Z0-9]{5,15}$"},
             "idcardno": {"pattern": "^[0-9]{6,12}$"},
@@ -649,10 +649,28 @@ def validate():
                             error_counter[length_error] += 1
                             is_valid = False
 
+                    elif field_lower == 'regioncode':
+                        regioncode_error = validate_regioncode(value)
+                        if regioncode_error:
+                            error_msg = f"regioncode: {regioncode_error}"
+                            row_errors.append(f"{code_value} {error_msg}")
+                            error_counter[error_msg] += 1
+                            is_valid = False
+
+
+                    elif field_lower == 'provincecode':
+                        provincecode_error = validate_provincecode(value)
+                        if provincecode_error:
+                            error_msg = f"provincecode: {provincecode_error}"
+                            row_errors.append(f"{code_value} {error_msg}")
+                            error_counter[error_msg] += 1
+                            is_valid = True
+
+
                     elif field_lower == 'citizenship':
                         citizenship_error = validate_citizenship(value)
                         if citizenship_error:
-                            error_msg f"citizenship: {citizenship_error}"
+                            error_msg = f"citizenship: {citizenship_error}"
                             row_errors.append(f"{code_value} {error_msg}")
                             error_counter[error_msg] += 1
                             is_valid = False

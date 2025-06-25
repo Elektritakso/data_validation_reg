@@ -161,6 +161,37 @@ def validate_citizenship(value):
     
     return None
 
+def validate_regioncode(value):
+    """Validate regioncode field (numeric, max 20 digits)"""
+    if value is None or value == '':
+        return "Regioncode is required"
+    
+    value = str(value).strip()
+    
+    if not value.isdigit():
+        return "Regioncode must contain only numbers"
+    
+    if len(value) > 20:
+        return "Regioncode must be maximum 20 digits"
+    
+    return None
+
+def validate_provincecode(value):
+    """Validate provincecode number max 20"""
+    if value is None or value == '':
+        return "Provincecode is required"
+    
+    value = str(value).strip()
+
+    if not value.isdigit():
+        return "Provincecode must be only numbers"
+    
+    if len(value) > 20:
+        return "Max 20 digits"
+    
+    return None
+
+
 def validate_signup_date(date_str):
     """
     Validate that a signup date is not in the future

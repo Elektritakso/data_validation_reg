@@ -11,17 +11,11 @@ import tempfile
 import logging
 from collections import Counter
 import json
-from dateutil.relativedelta import relativedelta
 
-# Import the validators
-from validators import (
-    is_valid_email, validate_currency_code, is_invalid_birthdate,
-    validate_phone_number, check_for_crlf, validate_country_code,
-    validate_language_code, validate_placeholder, validate_name,
-    validate_signup_date, validate_name_length, validate_zip_code,
-    validate_address_fields, validate_language_country_consistency,
-    enhanced_email_validation, validate_citizenship, validate_regioncode, validate_provincecode
-)
+
+# Import the new validator architecture
+from validator_registry import validator_registry
+from validators_common import *
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 2048 * 1024 * 1024 
@@ -39,34 +33,52 @@ REGULATIONS = {
         "required_fields": ["firstname", "lastname", 
                             "email", "birthdate", "address",
                             "city", "countrycode", "zip", "cellphone",
-                            "phone", "gender", "username",
+                            "gender", "username",
                             "birthdate", "citizenship", "regioncode",
                             "provincecode", "province", "personalid", 
-                            "idcardno", "passportid", "driverslicenseno", 
-                            "birthcity", "birthcountrycode", "firstname", 
-                            "firstsurname", "secondsurname", "secondfirstname" ],
+                            "idcardno", 
+                            "birthcity", "birthcountrycode"],
         "validations": {
-            "birthdate": {"min_age": 18},
+            "birthdate": {"required": True, "min_age": 18},
             "email": {"required": True},
-            "countrycode": {"pattern": "^[A-Z]{2}$"},
-            "gender": {"values": ["M", "F"]},
+            "countrycode": {"required": True, "pattern": "^[A-Z]{2}$"},
+            "gender": {"required": True, "values": ["M", "F"]},
             "citizenship": {"required": True, "pattern": "^[A-Z]{2}$"},
             "regioncode": {"required": True, "pattern": "^[0-9]{1,20}$"},
             "provincecode": {"required": True, "pattern": "^[0-9]{1,20}$"},
-            "province": {"required": True, "max_length": 50},
-            "personalid": {"pattern": "^[A-Z0-9]{5,15}$"},
-            "idcardno": {"pattern": "^[0-9]{6,12}$"},
-            "passportid": {"pattern": "^[A-Z0-9]{6,12}$"},
-            "driverslicenseno": {"pattern": "^[A-Z0-9]{6,15}$"},
+            "province": {"required": True, "max_length": 100},
+            "personalid": {"required": True, "pattern": "^[A-Z0-9]{5,15}$", "max_length": 10, "min_length": 6},
+            "idcardno": {"required": True, "pattern": "^[0-9]{6,12}$", "max_length": 10, "min_length": 6 },
             "birthcity": {"required": True, "max_length": 50},
-            "birthcountrycode": {"pattern": "^[A-Z]{2}$"},
-            "firstsurname": {"required": True, "max_length": 50},
-            "secondsurname": {"max_length": 50},
-            "secondfirstname": {"max_length": 50},
-            "cellphone": {"pattern": "^[0-9+]{7,15}$"},
-            "phone": {"pattern": "^[0-9+]{7,15}$"},
-            "zip": {"pattern": "^[0-9]{5,8}$"}
+            "birthcountrycode": {"required": True, "pattern": "^[A-Z]{2}$"},
+            "cellphone": {"required": True, "pattern": "^[0-9+]{7,15}$"},
+            "zip": {"required": True, "pattern": "^[0-9]{5,8}$"}
         }
+    },
+
+    "PE": {
+        "name": "Peru",
+        "required_fields": ["firstname", "lastname", 
+                            "email", "birthdate", "address",
+                            "city", "countrycode",
+                            "username",
+                            "citizenship",
+                            "provincecode", "province", "personalid", 
+                            "idcardno", "regioncode"],
+        "validations": {
+            "birthdate": {"required": True,"min_age": 18},
+            "email": {"required": True},
+            "countrycode": {"required": True, "pattern": "^[A-Z]{2}$"},
+            "citizenship": {"required": True, "pattern": "^[A-Z]{2}$"},
+            "regioncode": {"required": True, "pattern": "^[0-9]{1,20}$"},
+            "provincecode": {"required": True, "pattern": "^[0-9]{1,20}$"},
+            "province": {"required": True, "max_length": 100},
+            "personalid": {"conditional": True, "depends_on": "citizenship", "pattern": "^[A-Z0-9]{5,15}$", "max_length": 10, "min_length": 6},
+            "idcardno": {"pattern": "^[0-9]{6,12}$", "max_length": 10, "min_length": 6},
+            "passportid": {"pattern": "^[A-Z0-9]{6,15}$", "max_length": 15, "min_length": 6},
+            "DRIVERLICENSENO": {"pattern": "^[A-Z0-9]{8,20}$", "max_length": 20, "min_length": 8}
+           
+                            }
     },
     "IMS": {
         "name": "Basic",
@@ -236,6 +248,68 @@ def check_duplicate_usernames(data):
         app.logger.debug(f"Sample duplicate usernames: {list(duplicate_usernames.keys())[:3]}")
     
     return duplicate_usernames
+
+def check_duplicate_personalids(data):
+    """
+    Check for duplicate personal IDs in the data
+    
+    Args:
+        data: List of dictionaries containing row data
+        
+    Returns:
+        Dictionary mapping personal IDs to lists of row indices where they appear
+    """
+    personalid_indices = {}
+    
+    for idx, row in enumerate(data):
+        if 'personalid' not in row or not row['personalid']:
+            continue
+            
+        personalid = str(row['personalid']).strip()
+        
+        if personalid in personalid_indices:
+            personalid_indices[personalid].append(idx)
+        else:
+            personalid_indices[personalid] = [idx]
+    
+    duplicate_personalids = {personalid: indices for personalid, indices in personalid_indices.items() if len(indices) > 1}
+    app.logger.debug(f"Found {len(duplicate_personalids)} duplicate personal IDs")
+    if duplicate_personalids:
+        app.logger.debug(f"Sample duplicate personal IDs: {list(duplicate_personalids.keys())[:3]}")
+    
+    return duplicate_personalids
+
+def check_duplicate_idcardnos(data):
+    """
+    Check for duplicate ID card numbers in the data
+    
+    Args:
+        data: List of dictionaries containing row data
+        
+    Returns:
+        Dictionary mapping ID card numbers to lists of row indices where they appear
+    """
+    idcardno_indices = {}
+    
+    for idx, row in enumerate(data):
+        if 'idcardno' not in row or not row['idcardno']:
+            continue
+            
+        idcardno = str(row['idcardno']).strip()
+        
+        if idcardno in idcardno_indices:
+            idcardno_indices[idcardno].append(idx)
+        else:
+            idcardno_indices[idcardno] = [idx]
+    
+    duplicate_idcardnos = {idcardno: indices for idcardno, indices in idcardno_indices.items() if len(indices) > 1}
+    app.logger.debug(f"Found {len(duplicate_idcardnos)} duplicate ID card numbers")
+    if duplicate_idcardnos:
+        app.logger.debug(f"Sample duplicate ID card numbers: {list(duplicate_idcardnos.keys())[:3]}")
+    
+    return duplicate_idcardnos
+
+
 
 @app.route('/')
 def index():
@@ -470,7 +544,7 @@ def validate():
                         chunk = []
                 if chunk:  
                     yield chunk
-        
+
         # Get the selected regulation
         selected_regulation = None
         if request.json and 'regulation' in request.json:
@@ -538,6 +612,10 @@ def validate():
         duplicate_emails = {}
         username_indices = {}
         duplicate_usernames = {}
+        personalid_indices = {}
+        duplicate_personalids = {}
+        idcardno_indices = {}
+        duplicate_idcardnos = {}
         
         validation_results = []
         row_idx = 0
@@ -554,9 +632,9 @@ def validate():
             for i, row in enumerate(mapped_chunk):
                 current_idx = row_idx + i
                 
+                # Track emails
                 if 'email' in row and row['email']:
                     email = str(row['email']).strip().lower()
-                    
                     if email in email_indices:
                         if email not in duplicate_emails:
                             duplicate_emails[email] = [email_indices[email]]
@@ -564,15 +642,35 @@ def validate():
                     else:
                         email_indices[email] = current_idx
                 
+                # Track usernames
                 if 'username' in row and row['username']:
                     username = str(row['username']).strip().lower()
-                    
                     if username in username_indices:
                         if username not in duplicate_usernames:
                             duplicate_usernames[username] = [username_indices[username]]
                         duplicate_usernames[username].append(current_idx)
                     else:
                         username_indices[username] = current_idx
+                
+                # Track personal IDs
+                if 'personalid' in row and row['personalid']:
+                    personalid = str(row['personalid']).strip()
+                    if personalid in personalid_indices:
+                        if personalid not in duplicate_personalids:
+                            duplicate_personalids[personalid] = [personalid_indices[personalid]]
+                        duplicate_personalids[personalid].append(current_idx)
+                    else:
+                        personalid_indices[personalid] = current_idx
+                
+                # Track ID card numbers
+                if 'idcardno' in row and row['idcardno']:
+                    idcardno = str(row['idcardno']).strip()
+                    if idcardno in idcardno_indices:
+                        if idcardno not in duplicate_idcardnos:
+                            duplicate_idcardnos[idcardno] = [idcardno_indices[idcardno]]
+                        duplicate_idcardnos[idcardno].append(current_idx)
+                    else:
+                        idcardno_indices[idcardno] = current_idx
             
             for i, row in enumerate(mapped_chunk):
                 current_idx = row_idx + i
@@ -580,6 +678,7 @@ def validate():
                 is_valid = True
                 code_value = row.get('code', 'N/A')
                 
+                # Check for duplicate emails
                 if 'email' in row and row['email']:
                     email = str(row['email']).strip().lower()
                     if email in duplicate_emails:
@@ -589,6 +688,7 @@ def validate():
                             error_counter["Duplicate email"] += 1
                             is_valid = False
                 
+                # Check for duplicate usernames
                 if 'username' in row and row['username']:
                     username = str(row['username']).strip().lower()
                     if username in duplicate_usernames:
@@ -598,12 +698,46 @@ def validate():
                             error_counter["Duplicate username"] += 1
                             is_valid = False
                 
+                # Check for duplicate personal IDs
+                if 'personalid' in row and row['personalid']:
+                    personalid = str(row['personalid']).strip()
+                    if personalid in duplicate_personalids:
+                        if duplicate_personalids[personalid][0] != current_idx:
+                            error_msg = f"Duplicate personal ID: {personalid} (also in row {duplicate_personalids[personalid][0] + 1})"
+                            row_errors.append(f"{code_value} {error_msg}")
+                            error_counter["Duplicate personal ID"] += 1
+                            is_valid = False
+                
+                # Check for duplicate ID card numbers
+                if 'idcardno' in row and row['idcardno']:
+                    idcardno = str(row['idcardno']).strip()
+                    if idcardno in duplicate_idcardnos:
+                        if duplicate_idcardnos[idcardno][0] != current_idx:
+                            error_msg = f"Duplicate ID card number: {idcardno} (also in row {duplicate_idcardnos[idcardno][0] + 1})"
+                            row_errors.append(f"{code_value} {error_msg}")
+                            error_counter["Duplicate ID card number"] += 1
+                            is_valid = False
+                
                 for field in row.keys():
                     if field is None or not should_validate(field):
                         continue
                     
                     value = row[field]
-                    if not str(value).strip():
+                    # Special handling for Peru PersonalID - conditional requirement
+                    if (field.lower() == 'personalid' and 
+                        selected_regulation and selected_regulation.get('name') == 'Peru'):
+                        # For Peru, PersonalID requirement depends on citizenship
+                        citizenship = row.get('citizenship', '')
+                        if str(citizenship).strip().upper() == 'ES' and not str(value).strip():
+                            error_msg = f"{field} is required for Spanish residents"
+                            row_errors.append(f"{code_value} {error_msg}")
+                            error_counter[error_msg] += 1
+                            is_valid = False
+                            continue
+                        elif not str(value).strip():
+                            # For non-Spanish residents, PersonalID is optional - skip validation
+                            continue
+                    elif not str(value).strip():
                         error_msg = f"{field} is required but missing"
                         row_errors.append(f"{code_value} {error_msg}")
                         error_counter[error_msg] += 1
@@ -637,13 +771,13 @@ def validate():
                             is_valid = False
                     
                     elif field_lower == 'firstname':
-                        name_error = validate_name(value, field)
+                        name_error = validate_name(value)
                         if name_error:
                             row_errors.append(f"{code_value} {name_error}")
                             error_counter[name_error] += 1
                             is_valid = False
                         
-                        length_error = validate_name_length(value, 'firstname', 50)
+                        length_error = validate_name_length(value, 1, 50)
                         if length_error:
                             row_errors.append(f"{code_value} {length_error}")
                             error_counter[length_error] += 1
@@ -657,15 +791,53 @@ def validate():
                             error_counter[error_msg] += 1
                             is_valid = False
 
-
                     elif field_lower == 'provincecode':
                         provincecode_error = validate_provincecode(value)
                         if provincecode_error:
                             error_msg = f"provincecode: {provincecode_error}"
                             row_errors.append(f"{code_value} {error_msg}")
                             error_counter[error_msg] += 1
-                            is_valid = True
+                            is_valid = False
 
+                    elif field_lower == 'province':
+                        province_error = validate_province(value)
+                        if province_error:
+                            error_msg = f"province: {province_error}"
+                            row_errors.append(f"{code_value} {error_msg}")
+                            error_counter[error_msg] += 1
+                            is_valid = False
+
+                    elif field_lower == 'personalid':
+                        # Use validator registry for regulation-specific validation
+                        regulation_name = selected_regulation.get('name') if selected_regulation else None
+                        personalid_validator = validator_registry.get_validator(regulation_name, 'personalid')
+                        
+                        if personalid_validator:
+                            # Check if conditional validation is needed
+                            conditional_info = validator_registry.has_conditional_validation(regulation_name, 'personalid')
+                            if conditional_info and conditional_info.get('conditional'):
+                                depends_on = conditional_info.get('depends_on')
+                                dependency_value = row.get(depends_on, '') if depends_on else ''
+                                personalid_error = personalid_validator(value, dependency_value)
+                            else:
+                                personalid_error = personalid_validator(value)
+                        else:
+                            # Use default personalid validation
+                            personalid_error = validate_personalid(value)
+                        
+                        if personalid_error:
+                            error_msg = f"personalid: {personalid_error}"
+                            row_errors.append(f"{code_value} {error_msg}")
+                            error_counter[error_msg] += 1
+                            is_valid = False
+
+                    elif field_lower == 'idcardno':
+                        idcardno_error = validate_idcardno(value)
+                        if idcardno_error:
+                            error_msg = f"idcardno: {idcardno_error}"
+                            row_errors.append(f"{code_value} {error_msg}")
+                            error_counter[error_msg] += 1
+                            is_valid = False
 
                     elif field_lower == 'citizenship':
                         citizenship_error = validate_citizenship(value)
@@ -682,16 +854,15 @@ def validate():
                             row_errors.append(f"{code_value} {error_msg}")
                             error_counter[error_msg] += 1
                             is_valid = False
-
                     
                     elif field_lower == 'lastname':
-                        name_error = validate_name(value, field)
+                        name_error = validate_name(value)
                         if name_error:
                             row_errors.append(f"{code_value} {name_error}")
                             error_counter[name_error] += 1
                             is_valid = False
                         
-                        length_error = validate_name_length(value, 'lastname', 50)
+                        length_error = validate_name_length(value, 1, 50)
                         if length_error:
                             row_errors.append(f"{code_value} {length_error}")
                             error_counter[length_error] += 1
@@ -714,13 +885,16 @@ def validate():
                             is_valid = False
 
                     elif field_lower in ['zipcode', 'postalcode', 'zip', 'postcode']:
-                        country_code = None
-                        for key, value in row.items():
-                            if key and key.lower() == 'countrycode':
-                                country_code = value
-                                break
+                        # Use validator registry for regulation-specific zip validation
+                        regulation_name = selected_regulation.get('name') if selected_regulation else None
+                        zip_validator = validator_registry.get_validator(regulation_name, 'zip')
                         
-                        zip_error = validate_zip_code(value, country_code)
+                        if zip_validator:
+                            zip_error = zip_validator(value)
+                        else:
+                            # Use default zip validation
+                            zip_error = validate_zip_code(value)
+                        
                         if zip_error:
                             error_msg = f"{field}: {zip_error}"
                             row_errors.append(f"{code_value} {error_msg}")
@@ -743,7 +917,6 @@ def validate():
                             error_counter[error_msg] += 1
                             is_valid = False
 
-                
                 address_errors = validate_address_fields(row)
                 if address_errors:
                     for error in address_errors:
@@ -757,6 +930,17 @@ def validate():
                         row_errors.append(f"{code_value} {error}")
                         error_counter[error] += 1
                         is_valid = False
+                
+                # Regulation-specific document validation using registry
+                regulation_name = selected_regulation.get('name') if selected_regulation else None
+                if regulation_name:
+                    document_validator = validator_registry.get_validator(regulation_name, 'documents')
+                    if document_validator:
+                        doc_error = document_validator(row)
+                        if doc_error:
+                            row_errors.append(f"{code_value} {doc_error}")
+                            error_counter[doc_error] += 1
+                            is_valid = False
                 
                 validation_results.append({
                     'row': current_idx + 1,
@@ -774,6 +958,8 @@ def validate():
         
         duplicate_email_count = len(duplicate_emails)
         duplicate_username_count = len(duplicate_usernames)
+        duplicate_personalid_count = len(duplicate_personalids)
+        duplicate_idcardno_count = len(duplicate_idcardnos)
         
         return jsonify({
             'validation_complete': True,
@@ -783,6 +969,8 @@ def validate():
             'error_counts': error_counts_sorted,
             'duplicate_email_count': duplicate_email_count,
             'duplicate_username_count': duplicate_username_count,
+            'duplicate_personalid_count': duplicate_personalid_count,
+            'duplicate_idcardno_count': duplicate_idcardno_count,
             'results': validation_results[:100],
             'all_columns': all_columns,
             'required_columns': required_columns,
@@ -794,4 +982,3 @@ def validate():
 
 if __name__ == '__main__':
     app.run(debug=True)
-

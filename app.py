@@ -13,7 +13,6 @@ from collections import Counter
 import json
 
 
-# Import the new validator architecture
 from validator_registry import validator_registry
 from validators_common import *
 from data_processor import data_processor
@@ -35,7 +34,7 @@ def cleanup_old_files():
             file_path = os.path.join(TEMP_FOLDER, filename)
             if os.path.isfile(file_path):
                 file_age = current_time - os.path.getmtime(file_path)
-                if file_age > 3600:  # 1 hour
+                if file_age > 3600:  
                     try:
                         os.remove(file_path)
                         app.logger.debug(f"Cleaned up old file: {filename}")
@@ -52,7 +51,7 @@ ALLOWED_EXTENSIONS = {'csv'}
 REGULATIONS = {
     "CO": {
         "name": "Columbia",
-        "required_fields": ["firstname", "lastname", 
+        "required_fields": ["code", "firstname", "lastname", 
                             "email", "birthdate", "address",
                             "city", "countrycode", "zip", "cellphone",
                             "gender", "username",
@@ -61,6 +60,9 @@ REGULATIONS = {
                             "idcardno", 
                             "birthcity", "birthcountrycode"],
         "validations": {
+            "code": {"required": True, "max_length": 20},
+            "firstname": {"required": True, "min_length": 2, "max_length": 50, "pattern": "^[a-zA-ZáéíóúñÁÉÍÓÚÑ\\s\\-\\'\\.\u00C0-\u017F]+$"},
+            "lastname": {"required": True, "min_length": 2, "max_length": 50, "pattern": "^[a-zA-ZáéíóúñÁÉÍÓÚÑ\\s\\-\\'\\.\u00C0-\u017F]+$"},
             "birthdate": {"required": True, "min_age": 18},
             "email": {"required": True},
             "countrycode": {"required": True, "pattern": "^[A-Z]{2}$"},
@@ -80,7 +82,7 @@ REGULATIONS = {
 
     "PE": {
         "name": "Peru",
-        "required_fields": ["firstname", "lastname", 
+        "required_fields": ["code", "firstname", "lastname", 
                             "email", "birthdate", "address",
                             "city", "countrycode", "zip",
                             "username",
@@ -88,6 +90,9 @@ REGULATIONS = {
                             "provincecode", "province", "personalid", 
                             "idcardno", "regioncode"],
         "validations": {
+            "code": {"required": True, "max_length": 50},
+            "firstname": {"required": True, "min_length": 2, "max_length": 50, "pattern": "^[a-zA-ZáéíóúñÁÉÍÓÚÑ\\s\\-\\'\\.\u00C0-\u017F]+$"},
+            "lastname": {"required": True, "min_length": 2, "max_length": 50, "pattern": "^[a-zA-ZáéíóúñÁÉÍÓÚÑ\\s\\-\\'\\.\u00C0-\u017F]+$"},
             "birthdate": {"required": True,"min_age": 18},
             "email": {"required": True},
             "countrycode": {"required": True, "pattern": "^[A-Z]{2}$"},
@@ -104,8 +109,11 @@ REGULATIONS = {
     },
     "IMS": {
         "name": "Basic",
-        "required_fields": ["email", "firstname", "lastname"],
+        "required_fields": ["code", "email", "firstname", "lastname"],
         "validations": {
+            "code": {"required": True, "max_length": 50},
+            "firstname": {"required": True, "min_length": 2, "max_length": 50, "pattern": "^[a-zA-ZáéíóúñÁÉÍÓÚÑ\\s\\-\\'\\.\u00C0-\u017F]+$"},
+            "lastname": {"required": True, "min_length": 2, "max_length": 50, "pattern": "^[a-zA-ZáéíóúñÁÉÍÓÚÑ\\s\\-\\'\\.\u00C0-\u017F]+$"},
             "email": {"required": True}
         }
     }
@@ -1063,14 +1071,22 @@ def validate():
                     elif field_lower == 'firstname':
                         name_error = validate_name(value)
                         if name_error:
-                            row_errors.append(f"{code_value} {name_error}")
-                            error_counter[name_error] += 1
+                            # Generic error for summary
+                            generic_error = name_error
+                            # Enhanced error with actual value for detailed display
+                            enhanced_error = enhance_error_with_value(name_error, 'firstname', value)
+                            row_errors.append(f"{code_value} firstname: {enhanced_error}")
+                            error_counter[generic_error] += 1
                             is_valid = False
                         
                         length_error = validate_name_length(value, 1, 50)
                         if length_error:
-                            row_errors.append(f"{code_value} {length_error}")
-                            error_counter[length_error] += 1
+                            # Generic error for summary
+                            generic_error = length_error
+                            # Enhanced error with actual value for detailed display
+                            enhanced_error = enhance_error_with_value(length_error, 'firstname', value)
+                            row_errors.append(f"{code_value} firstname: {enhanced_error}")
+                            error_counter[generic_error] += 1
                             is_valid = False
 
                     elif field_lower == 'regioncode':
@@ -1154,14 +1170,22 @@ def validate():
                     elif field_lower == 'lastname':
                         name_error = validate_name(value)
                         if name_error:
-                            row_errors.append(f"{code_value} {name_error}")
-                            error_counter[name_error] += 1
+                            # Generic error for summary
+                            generic_error = name_error
+                            # Enhanced error with actual value for detailed display
+                            enhanced_error = enhance_error_with_value(name_error, 'lastname', value)
+                            row_errors.append(f"{code_value} lastname: {enhanced_error}")
+                            error_counter[generic_error] += 1
                             is_valid = False
                         
                         length_error = validate_name_length(value, 1, 50)
                         if length_error:
-                            row_errors.append(f"{code_value} {length_error}")
-                            error_counter[length_error] += 1
+                            # Generic error for summary
+                            generic_error = length_error
+                            # Enhanced error with actual value for detailed display
+                            enhanced_error = enhance_error_with_value(length_error, 'lastname', value)
+                            row_errors.append(f"{code_value} lastname: {enhanced_error}")
+                            error_counter[generic_error] += 1
                             is_valid = False
                     
                     elif field_lower == 'address':

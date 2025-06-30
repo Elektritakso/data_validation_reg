@@ -1,4 +1,6 @@
-/* Validation styling */
+/* Data Validation Tool - Custom Styles */
+
+/* Table and layout improvements */
 .table-responsive {
     overflow-x: auto;
 }
@@ -7,18 +9,23 @@
     margin-bottom: 0;
 }
 
-/* Custom styling for the accordion */
-.accordion-button:not(.collapsed) {
-    background-color: #e7f1ff;
-    color: #0d6efd;
-}
-
-.accordion-button.collapsed {
-    background-color: #f8f9fa;
-}
-
-/* Loading spinner styles */
+/* Loading spinner customization */
 .spinner-border {
     width: 3rem; 
     height: 3rem;
+}
+
+/* Validation results styling */
+.validation-summary {
+    margin-top: 2rem;
+}
+
+/* Error badge styling for invalid rows */
+.badge {
+    font-size: 0.75em;
+}
+
+/* Download button styling */
+#download-errors-btn {
+    white-space: nowrap;
 }

@@ -43,7 +43,6 @@ def cleanup_old_files():
     except Exception as e:
         app.logger.error(f"Error during cleanup: {str(e)}")
 
-# Clean up old files on startup
 cleanup_old_files()
 
 ALLOWED_EXTENSIONS = {'csv'}
@@ -119,7 +118,6 @@ REGULATIONS = {
     }
 }
 
-# Enable regulations feature
 ENABLE_REGULATIONS = True
 
 def allowed_file(filename):
@@ -368,10 +366,8 @@ def get_file_info():
     if not os.path.exists(file_path):
         return jsonify({'error': 'File no longer exists'}), 400
     
-    # Get memory usage estimate
     memory_info = data_processor.get_memory_usage_estimate(file_path)
     
-    # Get basic file info
     file_stats = {
         'file_size_bytes': os.path.getsize(file_path),
         'rows': file_info['rows'],
@@ -406,7 +402,6 @@ def get_regulation_fields(regulation_code):
         'required_fields': regulation['required_fields']
     }
     
-    # Add is_custom flag if present
     if 'is_custom' in regulation:
         response['is_custom'] = regulation['is_custom']
     
@@ -548,20 +543,17 @@ def upload_file():
             'column_mappings': column_mappings
         }
         
-        # Use optimized data processor for preview
         try:
             preview_info = data_processor.get_file_preview(temp_file_path, n_rows=10)
             preview_data = preview_info['preview_data']
             row_count = preview_info['total_rows']
             detected_columns = preview_info['columns']
             
-            # Update file info with optimized detection
             if preview_info['file_info']:
                 encoding = preview_info['file_info']['encoding']
                 delimiter = preview_info['file_info']['delimiter']
         except Exception as e:
             app.logger.warning(f"Optimized preview failed, falling back to standard method: {str(e)}")
-            # Fallback to original method
             preview_data = []
             with open(temp_file_path, 'r', encoding=encoding, errors='replace') as f:
                 if enclosure and enclosure != '':
@@ -606,7 +598,6 @@ def validate_optimized():
         if not os.path.exists(file_path):
             return jsonify({'error': 'File no longer exists. Please upload again.'}), 400
         
-        # Get validation parameters
         selected_regulation = None
         if request.json and 'regulation' in request.json:
             regulation_key = request.json['regulation']
@@ -614,7 +605,6 @@ def validate_optimized():
                 selected_regulation = REGULATIONS[regulation_key]
                 app.logger.info(f"Using regulation: {regulation_key}")
         
-        # Determine required columns
         if selected_regulation:
             required_columns = selected_regulation.get('required_fields', [])
         elif request.json and 'required_columns' in request.json:
@@ -628,18 +618,15 @@ def validate_optimized():
                               'countrycode', 'signuplanguagecode', 'currencycode',
                               'username', 'zip', 'signupdate', 'password']
         
-        # Get column mappings
         column_mappings = {}
         if request.json and 'column_mappings' in request.json:
             column_mappings = request.json['column_mappings']
         else:
             column_mappings = session.get('column_mappings', {})
         
-        # Check memory requirements
         memory_info = data_processor.get_memory_usage_estimate(file_path)
         app.logger.info(f"Memory estimate: {memory_info}")
         
-        # Read CSV with pandas
         try:
             df = data_processor.read_csv_optimized(file_path)
             app.logger.info(f"Successfully loaded {len(df)} rows with pandas")
@@ -647,17 +634,14 @@ def validate_optimized():
             app.logger.error(f"Failed to read with pandas: {str(e)}")
             return jsonify({'error': f'Error reading file: {str(e)}'}), 500
         
-        # Apply column mappings
         if column_mappings:
             df = df.rename(columns=column_mappings)
         
-        # Prepare regulation info for validation
         regulation_info = {
             'regulation': selected_regulation,
             'name': selected_regulation.get('name') if selected_regulation else None
         }
         
-        # Use parallel validation
         try:
             validation_results = data_processor.validate_dataframe_parallel(
                 df=df,
@@ -668,26 +652,22 @@ def validate_optimized():
             
             app.logger.info(f"Parallel validation completed: {validation_results['total_rows']} rows processed")
             
-            # Prepare detailed errors for CSV export
             detailed_errors = []
             all_results = validation_results.get('results', [])
             for result in all_results:
                 if not result['valid']:
                     for error in result['errors']:
-                        # Parse the error to extract field and error details
                         error_parts = error.split(': ', 2)
                         if len(error_parts) >= 2:
                             code_field = error_parts[0]
                             error_message = ': '.join(error_parts[1:])
                             
-                            # Extract field name
                             code_field_parts = code_field.rsplit(' ', 1)
                             if len(code_field_parts) == 2:
                                 field_name = code_field_parts[1]
                             else:
                                 field_name = "unknown"
                             
-                            # Extract actual value if present
                             actual_value = ""
                             if "': '" in error_message and error_message.endswith("'"):
                                 value_start = error_message.rfind(": '") + 3
@@ -707,7 +687,6 @@ def validate_optimized():
                                 'invalid_value': actual_value
                             })
             
-            # Store detailed errors in temporary file instead of session
             if detailed_errors:
                 errors_file_id = str(uuid.uuid4())
                 errors_file_path = os.path.join(TEMP_FOLDER, f"errors_{errors_file_id}.json")
@@ -719,7 +698,6 @@ def validate_optimized():
             else:
                 session.pop('errors_file_id', None)
             
-            # Limit results for response
             limited_results = validation_results.copy()
             limited_results['results'] = validation_results['results'][:100]
             limited_results['has_errors_for_download'] = len(detailed_errors) > 0
@@ -747,7 +725,6 @@ def download_errors():
         if not os.path.exists(errors_file_path):
             return jsonify({'error': 'Validation errors file no longer exists'}), 400
         
-        # Load detailed errors from file
         try:
             with open(errors_file_path, 'r', encoding='utf-8') as f:
                 detailed_errors = json.load(f)
@@ -758,11 +735,9 @@ def download_errors():
         if not detailed_errors:
             return jsonify({'error': 'No validation errors to download'}), 400
         
-        # Create CSV content
         output = io.StringIO()
         writer = csv.writer(output)
         
-        # Write header
         writer.writerow([
             'Row Number',
             'Code', 
@@ -772,7 +747,6 @@ def download_errors():
             'Full Error Message'
         ])
         
-        # Write error data
         for error in detailed_errors:
             writer.writerow([
                 error['row_number'],
@@ -783,7 +757,6 @@ def download_errors():
                 error['error_message']
             ])
         
-        # Create response
         csv_content = output.getvalue()
         output.close()
         
@@ -791,7 +764,6 @@ def download_errors():
         response.headers['Content-Type'] = 'text/csv'
         response.headers['Content-Disposition'] = f'attachment; filename=validation_errors_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
         
-        # Clean up the temporary errors file after successful download
         try:
             os.remove(errors_file_path)
             session.pop('errors_file_id', None)
@@ -836,7 +808,6 @@ def validate():
                 if chunk:  
                     yield chunk
 
-        # Get the selected regulation
         selected_regulation = None
         if request.json and 'regulation' in request.json:
             regulation_key = request.json['regulation']
@@ -844,7 +815,6 @@ def validate():
                 selected_regulation = REGULATIONS[regulation_key]
                 app.logger.info(f"Using regulation: {regulation_key}")
         
-        # If regulation is selected, use its required fields
         if selected_regulation:
             required_columns = selected_regulation.get('required_fields', [])
             session['required_columns'] = required_columns
@@ -923,7 +893,6 @@ def validate():
             for i, row in enumerate(mapped_chunk):
                 current_idx = row_idx + i
                 
-                # Track emails
                 if 'email' in row and row['email']:
                     email = str(row['email']).strip().lower()
                     if email in email_indices:
@@ -933,7 +902,6 @@ def validate():
                     else:
                         email_indices[email] = current_idx
                 
-                # Track usernames
                 if 'username' in row and row['username']:
                     username = str(row['username']).strip().lower()
                     if username in username_indices:
@@ -943,7 +911,6 @@ def validate():
                     else:
                         username_indices[username] = current_idx
                 
-                # Track personal IDs
                 if 'personalid' in row and row['personalid']:
                     personalid = str(row['personalid']).strip()
                     if personalid in personalid_indices:
@@ -953,7 +920,6 @@ def validate():
                     else:
                         personalid_indices[personalid] = current_idx
                 
-                # Track ID card numbers
                 if 'idcardno' in row and row['idcardno']:
                     idcardno = str(row['idcardno']).strip()
                     if idcardno in idcardno_indices:
@@ -969,7 +935,6 @@ def validate():
                 is_valid = True
                 code_value = row.get('code', 'N/A')
                 
-                # Check for duplicate emails
                 if 'email' in row and row['email']:
                     email = str(row['email']).strip().lower()
                     if email in duplicate_emails:
@@ -979,7 +944,6 @@ def validate():
                             error_counter["Duplicate email"] += 1
                             is_valid = False
                 
-                # Check for duplicate usernames
                 if 'username' in row and row['username']:
                     username = str(row['username']).strip().lower()
                     if username in duplicate_usernames:
@@ -989,7 +953,6 @@ def validate():
                             error_counter["Duplicate username"] += 1
                             is_valid = False
                 
-                # Check for duplicate personal IDs
                 if 'personalid' in row and row['personalid']:
                     personalid = str(row['personalid']).strip()
                     if personalid in duplicate_personalids:
@@ -999,7 +962,6 @@ def validate():
                             error_counter["Duplicate personal ID"] += 1
                             is_valid = False
                 
-                # Check for duplicate ID card numbers
                 if 'idcardno' in row and row['idcardno']:
                     idcardno = str(row['idcardno']).strip()
                     if idcardno in duplicate_idcardnos:
@@ -1014,10 +976,8 @@ def validate():
                         continue
                     
                     value = row[field]
-                    # Special handling for Peru PersonalID - conditional requirement
                     if (field.lower() == 'personalid' and 
                         selected_regulation and selected_regulation.get('name') == 'Peru'):
-                        # For Peru, PersonalID requirement depends on citizenship
                         citizenship = row.get('citizenship', '')
                         if str(citizenship).strip().upper() == 'ES' and not str(value).strip():
                             error_msg = f"{field} is required for Spanish residents"
@@ -1026,7 +986,6 @@ def validate():
                             is_valid = False
                             continue
                         elif not str(value).strip():
-                            # For non-Spanish residents, PersonalID is optional - skip validation
                             continue
                     elif not str(value).strip():
                         error_msg = f"{field} is required but missing"
@@ -1040,9 +999,7 @@ def validate():
                     if field_lower == 'email':
                         email_error = enhanced_email_validation(value)
                         if email_error:
-                            # Generic error for summary
                             generic_error = email_error
-                            # Enhanced error with actual value for detailed display
                             enhanced_error = enhance_error_with_value(email_error, 'email', value)
                             row_errors.append(f"{code_value} {enhanced_error}")
                             error_counter[generic_error] += 1
@@ -1060,9 +1017,7 @@ def validate():
                     elif field_lower in ['phone', 'cellphone']:
                         phone_error = validate_phone_number(value)
                         if phone_error:
-                            # Generic error for summary
                             generic_error = f"{field}: {phone_error}"
-                            # Enhanced error with actual value for detailed display
                             enhanced_error = f"{field}: {enhance_error_with_value(phone_error, field, value)}"
                             row_errors.append(f"{code_value} {enhanced_error}")
                             error_counter[generic_error] += 1
@@ -1071,9 +1026,7 @@ def validate():
                     elif field_lower == 'firstname':
                         name_error = validate_name(value)
                         if name_error:
-                            # Generic error for summary
                             generic_error = name_error
-                            # Enhanced error with actual value for detailed display
                             enhanced_error = enhance_error_with_value(name_error, 'firstname', value)
                             row_errors.append(f"{code_value} firstname: {enhanced_error}")
                             error_counter[generic_error] += 1
@@ -1081,9 +1034,7 @@ def validate():
                         
                         length_error = validate_name_length(value, 1, 50)
                         if length_error:
-                            # Generic error for summary
                             generic_error = length_error
-                            # Enhanced error with actual value for detailed display
                             enhanced_error = enhance_error_with_value(length_error, 'firstname', value)
                             row_errors.append(f"{code_value} firstname: {enhanced_error}")
                             error_counter[generic_error] += 1
@@ -1114,12 +1065,10 @@ def validate():
                             is_valid = False
 
                     elif field_lower == 'personalid':
-                        # Use validator registry for regulation-specific validation
                         regulation_name = selected_regulation.get('name') if selected_regulation else None
                         personalid_validator = validator_registry.get_validator(regulation_name, 'personalid')
                         
                         if personalid_validator:
-                            # Check if conditional validation is needed
                             conditional_info = validator_registry.has_conditional_validation(regulation_name, 'personalid')
                             if conditional_info and conditional_info.get('conditional'):
                                 depends_on = conditional_info.get('depends_on')
@@ -1128,13 +1077,10 @@ def validate():
                             else:
                                 personalid_error = personalid_validator(value)
                         else:
-                            # Use default personalid validation
                             personalid_error = validate_personalid(value)
                         
                         if personalid_error:
-                            # Generic error for summary
                             generic_error = f"personalid: {personalid_error}"
-                            # Enhanced error with actual value for detailed display
                             enhanced_error = f"personalid: {enhance_error_with_value(personalid_error, 'personalid', value)}"
                             row_errors.append(f"{code_value} {enhanced_error}")
                             error_counter[generic_error] += 1
@@ -1143,9 +1089,7 @@ def validate():
                     elif field_lower == 'idcardno':
                         idcardno_error = validate_idcardno(value)
                         if idcardno_error:
-                            # Generic error for summary
                             generic_error = f"idcardno: {idcardno_error}"
-                            # Enhanced error with actual value for detailed display
                             enhanced_error = f"idcardno: {enhance_error_with_value(idcardno_error, 'idcardno', value)}"
                             row_errors.append(f"{code_value} {enhanced_error}")
                             error_counter[generic_error] += 1
@@ -1170,9 +1114,7 @@ def validate():
                     elif field_lower == 'lastname':
                         name_error = validate_name(value)
                         if name_error:
-                            # Generic error for summary
                             generic_error = name_error
-                            # Enhanced error with actual value for detailed display
                             enhanced_error = enhance_error_with_value(name_error, 'lastname', value)
                             row_errors.append(f"{code_value} lastname: {enhanced_error}")
                             error_counter[generic_error] += 1
@@ -1180,9 +1122,7 @@ def validate():
                         
                         length_error = validate_name_length(value, 1, 50)
                         if length_error:
-                            # Generic error for summary
                             generic_error = length_error
-                            # Enhanced error with actual value for detailed display
                             enhanced_error = enhance_error_with_value(length_error, 'lastname', value)
                             row_errors.append(f"{code_value} lastname: {enhanced_error}")
                             error_counter[generic_error] += 1
@@ -1205,14 +1145,12 @@ def validate():
                             is_valid = False
 
                     elif field_lower in ['zipcode', 'postalcode', 'zip', 'postcode']:
-                        # Use validator registry for regulation-specific zip validation
                         regulation_name = selected_regulation.get('name') if selected_regulation else None
                         zip_validator = validator_registry.get_validator(regulation_name, 'zip')
                         
                         if zip_validator:
                             zip_error = zip_validator(value)
                         else:
-                            # Use default zip validation
                             zip_error = validate_zip_code(value)
                         
                         if zip_error:
@@ -1251,7 +1189,6 @@ def validate():
                         error_counter[error] += 1
                         is_valid = False
                 
-                # Regulation-specific document validation using registry
                 regulation_name = selected_regulation.get('name') if selected_regulation else None
                 if regulation_name:
                     document_validator = validator_registry.get_validator(regulation_name, 'documents')
@@ -1281,31 +1218,26 @@ def validate():
         duplicate_personalid_count = len(duplicate_personalids)
         duplicate_idcardno_count = len(duplicate_idcardnos)
         
-        # Prepare detailed errors for CSV export
         detailed_errors = []
         for result in validation_results:
             if not result['valid']:
                 for error in result['errors']:
-                    # Parse the error to extract field and error details
-                    error_parts = error.split(': ', 2)  # Split on first 2 colons
+                    error_parts = error.split(': ', 2)  
                     if len(error_parts) >= 2:
-                        code_field = error_parts[0]  # "67081402 cellphone"
-                        error_message = ': '.join(error_parts[1:])  # "Phone number has invalid format: 'abc123'"
+                        code_field = error_parts[0]  
+                        error_message = ': '.join(error_parts[1:])  
                         
-                        # Extract field name
                         code_field_parts = code_field.rsplit(' ', 1)
                         if len(code_field_parts) == 2:
                             field_name = code_field_parts[1]
                         else:
                             field_name = "unknown"
                         
-                        # Extract actual value if present
                         actual_value = ""
                         if "': '" in error_message and error_message.endswith("'"):
                             value_start = error_message.rfind(": '") + 3
                             value_end = error_message.rfind("'")
                             actual_value = error_message[value_start:value_end]
-                            # Remove the value part from error message for clean error type
                             error_type = error_message[:error_message.rfind(": '")]
                         else:
                             error_type = error_message
@@ -1320,7 +1252,6 @@ def validate():
                             'invalid_value': actual_value
                         })
         
-        # Store detailed errors in temporary file instead of session
         if detailed_errors:
             errors_file_id = str(uuid.uuid4())
             errors_file_path = os.path.join(TEMP_FOLDER, f"errors_{errors_file_id}.json")

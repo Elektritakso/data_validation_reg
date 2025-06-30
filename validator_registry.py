@@ -1,5 +1,3 @@
-# Validator Registry - Central system to manage regulation-specific validators
-
 import importlib
 from validators_common import *
 from validators_peru import validate_peru_personalid, validate_peru_documents, validate_peru_zip
@@ -85,5 +83,4 @@ class ValidatorRegistry:
         
         self.regulation_validators[regulation_name][validator_type] = validator_func
 
-# Create a global registry instance
 validator_registry = ValidatorRegistry()

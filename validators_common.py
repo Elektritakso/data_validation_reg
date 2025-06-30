@@ -5,7 +5,6 @@ from dateutil.relativedelta import relativedelta
 
 logger = logging.getLogger(__name__)
 
-# Pre-compiled regex patterns for better performance
 EMAIL_PATTERN = re.compile(r'^[a-zA-Z0-9._%+-áéíóúñÁÉÍÓÚÑ$]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
 CURRENCY_CODE_PATTERN = re.compile(r'^[A-Z]{3}$')
 PHONE_PATTERN = re.compile(r'^\+?\d[\d\s\-\(\)]{8,20}$')
@@ -50,7 +49,7 @@ def is_invalid_birthdate(birthdate_str, age_limit=18):
     
     birthdate_str = str(birthdate_str).strip()
     
-    date_formats = ['%d/%m/%Y', '%m/%d/%Y'] # kas siin peaks formaate juurde lisama ?
+    date_formats = ['%d/%m/%Y', '%m/%d/%Y'] 
     
     for date_format in date_formats:
         try:
@@ -211,7 +210,6 @@ def validate_language_country_consistency(row):
         language = str(language).strip().lower()
         country = str(country).strip().upper()
         
-        # Common language-country mappings
         language_country_map = {
             'es': ['ES', 'MX', 'AR', 'CO', 'PE', 'CL', 'VE'],
             'en': ['US', 'GB', 'CA', 'AU', 'NZ'],
@@ -235,7 +233,6 @@ def enhanced_email_validation(email):
     
     email = str(email).strip().lower()
     
-    # Check for disposable email domains
     disposable_domains = ['tempmail.org', '10minutemail.com', 'guerrillamail.com']
     domain = email.split('@')[1]
     

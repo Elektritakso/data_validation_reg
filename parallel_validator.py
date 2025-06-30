@@ -1,6 +1,3 @@
-"""
-Parallel validation functions for improved performance
-"""
 
 import logging
 from typing import Dict, List, Any
@@ -27,7 +24,6 @@ def enhance_error_with_value(error_message: str, field_name: str, field_value: A
     
     field_value_str = str(field_value).strip()
     
-    # Add the actual value to the error message
     return f"{error_message}: '{field_value_str}'"
 
 def validate_single_row(row_data: Dict[str, Any], row_index: int, 
@@ -49,7 +45,6 @@ def validate_single_row(row_data: Dict[str, Any], row_index: int,
     is_valid = True
     code_value = row_data.get('code', 'N/A')
     
-    # Get regulation details
     selected_regulation = regulation_info.get('regulation') if regulation_info else None
     required_columns_lower = [col.lower() for col in required_columns]
     
@@ -58,7 +53,6 @@ def validate_single_row(row_data: Dict[str, Any], row_index: int,
             return False
         return column_name.lower() in required_columns_lower
     
-    # Validate each required field
     for field in row_data.keys():
         if field is None or not should_validate(field):
             continue
@@ -66,7 +60,6 @@ def validate_single_row(row_data: Dict[str, Any], row_index: int,
         value = row_data[field]
         field_lower = field.lower() if field is not None else ""
         
-        # Special handling for Peru PersonalID - conditional requirement
         if (field_lower == 'personalid' and 
             selected_regulation and selected_regulation.get('name') == 'Peru'):
             citizenship = row_data.get('citizenship', '')
@@ -83,15 +76,12 @@ def validate_single_row(row_data: Dict[str, Any], row_index: int,
             is_valid = False
             continue
         
-        # Apply field-specific validations
         error = _validate_field(field_lower, value, row_data, selected_regulation)
         if error:
-            # Enhance error with actual value for detailed display
             enhanced_error = enhance_error_with_value(error, field, value)
             row_errors.append(f"{code_value} {field}: {enhanced_error}")
             is_valid = False
     
-    # Cross-field validations
     cross_field_errors = _validate_cross_fields(row_data, selected_regulation)
     if cross_field_errors:
         for error in cross_field_errors:
@@ -246,15 +236,12 @@ def _validate_cross_fields(row_data: Dict, selected_regulation: Dict = None) -> 
     """
     errors = []
     
-    # Address field consistency
     address_errors = validate_address_fields(row_data)
     errors.extend(address_errors)
     
-    # Language-country consistency
     language_country_errors = validate_language_country_consistency(row_data)
     errors.extend(language_country_errors)
     
-    # Regulation-specific document validation
     if selected_regulation:
         regulation_name = selected_regulation.get('name')
         document_validator = validator_registry.get_validator(regulation_name, 'documents')
@@ -295,5 +282,4 @@ def find_duplicates_parallel(data_chunk: List[Dict], field_name: str,
         else:
             value_indices[value] = [global_idx]
     
-    # Return only values that appear more than once
     return {value: indices for value, indices in value_indices.items() if len(indices) > 1}

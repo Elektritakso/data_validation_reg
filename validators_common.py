@@ -5,6 +5,17 @@ from dateutil.relativedelta import relativedelta
 
 logger = logging.getLogger(__name__)
 
+# Pre-compiled regex patterns for better performance
+EMAIL_PATTERN = re.compile(r'^[a-zA-Z0-9._%+-áéíóúñÁÉÍÓÚÑ$]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+CURRENCY_CODE_PATTERN = re.compile(r'^[A-Z]{3}$')
+PHONE_PATTERN = re.compile(r'^\+?\d[\d\s\-\(\)]{8,20}$')
+COUNTRY_CODE_PATTERN = re.compile(r'^[A-Z]{2}$')
+LANGUAGE_CODE_PATTERN = re.compile(r'^[a-z]{2}$')
+NAME_PATTERN = re.compile(r'^[a-zA-ZáéíóúñÁÉÍÓÚÑ\s\-\'\.]+$')
+ZIP_CODE_PATTERN = re.compile(r'^[a-zA-Z0-9\s\-]{3,10}$')
+REGION_PROVINCE_CODE_PATTERN = re.compile(r'^[A-Za-z0-9\-_]{1,10}$')
+PERSONAL_ID_PATTERN = re.compile(r'^[A-Za-z0-9\-\s]+$')
+
 def is_valid_email(email):
     """Check if the email has a valid format"""
     if email is None or email == '':
@@ -15,7 +26,7 @@ def is_valid_email(email):
     if '@' not in email:
         return "Email missing @ symbol"
     
-    if not re.match(r'^[a-zA-Z0-9._%+-áéíóúñÁÉÍÓÚÑ$]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email):
+    if not EMAIL_PATTERN.match(email):
         return "Email has invalid format"
     
     return None
@@ -27,7 +38,7 @@ def validate_currency_code(code):
     
     code = str(code).strip().upper()
     
-    if not re.match(r'^[A-Z]{3}$', code):
+    if not CURRENCY_CODE_PATTERN.match(code):
         return "Not a valid format (should be 3 uppercase letters)"
     
     return None
@@ -69,7 +80,7 @@ def validate_phone_number(phone):
     
     phone = str(phone).strip()
     
-    if not re.match(r'^\+?\d[\d\s\-\(\)]{8,20}$', phone):
+    if not PHONE_PATTERN.match(phone):
         return "Phone number has invalid format"
     
     return None
@@ -92,7 +103,7 @@ def validate_country_code(code):
     
     code = str(code).strip().upper()
     
-    if not re.match(r'^[A-Z]{2}$', code):
+    if not COUNTRY_CODE_PATTERN.match(code):
         return "Country code must be 2 uppercase letters"
     
     return None
@@ -104,7 +115,7 @@ def validate_language_code(code):
     
     code = str(code).strip().lower()
     
-    if not re.match(r'^[a-z]{2}$', code):
+    if not LANGUAGE_CODE_PATTERN.match(code):
         return "Language code must be 2 lowercase letters"
     
     return None
@@ -119,7 +130,7 @@ def validate_name(name, max_length=50):
     if len(name) > max_length:
         return f"Name too long (max {max_length} characters)"
     
-    if not re.match(r'^[a-zA-ZáéíóúñÁÉÍÓÚÑ\s\-\'\.]+$', name):
+    if not NAME_PATTERN.match(name):
         return "Name contains invalid characters"
     
     return None
@@ -170,7 +181,7 @@ def validate_zip_code(zip_code):
     
     zip_code = str(zip_code).strip()
     
-    if not re.match(r'^[a-zA-Z0-9\s\-]{3,10}$', zip_code):
+    if not ZIP_CODE_PATTERN.match(zip_code):
         return "Zip code has invalid format"
     
     return None
@@ -240,7 +251,7 @@ def validate_citizenship(citizenship):
     
     citizenship = str(citizenship).strip().upper()
     
-    if not re.match(r'^[A-Z]{2}$', citizenship):
+    if not COUNTRY_CODE_PATTERN.match(citizenship):
         return "Citizenship must be 2 uppercase letters"
     
     return None
@@ -252,7 +263,7 @@ def validate_regioncode(regioncode):
     
     regioncode = str(regioncode).strip()
     
-    if not re.match(r'^[A-Za-z0-9\-_]{1,10}$', regioncode):
+    if not REGION_PROVINCE_CODE_PATTERN.match(regioncode):
         return "Region code contains invalid characters or is too long"
     
     return None
@@ -264,7 +275,7 @@ def validate_provincecode(provincecode):
     
     provincecode = str(provincecode).strip()
     
-    if not re.match(r'^[A-Za-z0-9\-_]{1,10}$', provincecode):
+    if not REGION_PROVINCE_CODE_PATTERN.match(provincecode):
         return "Province code contains invalid characters or is too long"
     
     return None
@@ -282,7 +293,7 @@ def validate_province(province):
     if len(province) > 50:
         return "Province name too long"
     
-    if not re.match(r'^[a-zA-ZáéíóúñÁÉÍÓÚÑ\s\-\'\.]+$', province):
+    if not NAME_PATTERN.match(province):
         return "Province contains invalid characters"
     
     return None
@@ -300,7 +311,7 @@ def validate_personalid(personalid):
     if len(personalid) > 20:
         return "Personal ID too long"
     
-    if not re.match(r'^[A-Za-z0-9\-\s]+$', personalid):
+    if not PERSONAL_ID_PATTERN.match(personalid):
         return "Personal ID contains invalid characters"
     
     return None
@@ -318,7 +329,7 @@ def validate_idcardno(idcardno):
     if len(idcardno) > 20:
         return "ID card number too long"
     
-    if not re.match(r'^[A-Za-z0-9\-\s]+$', idcardno):
+    if not PERSONAL_ID_PATTERN.match(idcardno):
         return "ID card number contains invalid characters"
     
     return None

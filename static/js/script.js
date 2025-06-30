@@ -657,11 +657,22 @@ function displayValidationResults(data) {
     
     validationSummary.innerHTML = `        <div class="alert ${data.invalid_rows > 0 ? 'alert-warning' : 'alert-success'}">
             <h4 class="alert-heading">Validation Complete</h4>
-            <p>Total Rows: <strong>${data.total_rows}</strong></p>
-            <p>Valid Rows: <strong>${data.valid_rows}</strong></p>
-            <p>Invalid Rows: <strong>${data.invalid_rows}</strong></p>
-            ${data.duplicate_email_count > 0 ? `<p>Duplicate Emails: <strong>${data.duplicate_email_count}</strong></p>` : ''}
-            ${data.duplicate_username_count > 0 ? `<p>Duplicate Usernames: <strong>${data.duplicate_username_count}</strong></p>` : ''}
+            <div class="row">
+                <div class="col-md-8">
+                    <p>Total Rows: <strong>${data.total_rows}</strong></p>
+                    <p>Valid Rows: <strong>${data.valid_rows}</strong></p>
+                    <p>Invalid Rows: <strong>${data.invalid_rows}</strong></p>
+                    ${data.duplicate_email_count > 0 ? `<p>Duplicate Emails: <strong>${data.duplicate_email_count}</strong></p>` : ''}
+                    ${data.duplicate_username_count > 0 ? `<p>Duplicate Usernames: <strong>${data.duplicate_username_count}</strong></p>` : ''}
+                </div>
+                <div class="col-md-4 text-end">
+                    ${data.has_errors_for_download && data.invalid_rows > 0 ? `
+                        <button class="btn btn-outline-danger" id="download-errors-btn">
+                            <i class="bi bi-download"></i> Download Errors CSV
+                        </button>
+                    ` : ''}
+                </div>
+            </div>
         </div>
     `;
     
@@ -760,7 +771,63 @@ function displayValidationResults(data) {
     
     elements.validationResults.appendChild(validationSummary);
     
+    // Add event listener for download button if it exists
+    const downloadBtn = document.getElementById('download-errors-btn');
+    if (downloadBtn) {
+        downloadBtn.addEventListener('click', function() {
+            downloadErrorsCSV();
+        });
+    }
+    
     elements.validationResults.scrollIntoView({ behavior: 'smooth' });
+}
+
+/**
+ * Download validation errors as CSV file
+ */
+function downloadErrorsCSV() {
+    const downloadBtn = document.getElementById('download-errors-btn');
+    const originalText = downloadBtn.innerHTML;
+    
+    // Show loading state
+    downloadBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Generating CSV...';
+    downloadBtn.disabled = true;
+    
+    fetch('/download-errors', {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Failed to download errors CSV');
+        }
+        return response.blob();
+    })
+    .then(blob => {
+        // Create download link
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = `validation_errors_${new Date().toISOString().slice(0,19).replace(/:/g, '-')}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        
+        showSuccess('Validation errors CSV downloaded successfully!');
+    })
+    .catch(error => {
+        console.error('Error downloading CSV:', error);
+        showError('Failed to download validation errors CSV');
+    })
+    .finally(() => {
+        // Restore button state
+        downloadBtn.innerHTML = originalText;
+        downloadBtn.disabled = false;
+    });
 }
 
 /**

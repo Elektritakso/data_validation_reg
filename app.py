@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, session
+from flask import Flask, render_template, request, jsonify, session, make_response
 import csv
 import io
 import re
@@ -16,6 +16,8 @@ import json
 # Import the new validator architecture
 from validator_registry import validator_registry
 from validators_common import *
+from data_processor import data_processor
+from parallel_validator import validate_single_row, enhance_error_with_value
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 2048 * 1024 * 1024 
@@ -24,6 +26,26 @@ logging.basicConfig(level=logging.DEBUG)
 
 TEMP_FOLDER = os.path.join(tempfile.gettempdir(), 'csv_validator')
 os.makedirs(TEMP_FOLDER, exist_ok=True)
+
+def cleanup_old_files():
+    """Clean up old temporary files (older than 1 hour)"""
+    try:
+        current_time = datetime.now().timestamp()
+        for filename in os.listdir(TEMP_FOLDER):
+            file_path = os.path.join(TEMP_FOLDER, filename)
+            if os.path.isfile(file_path):
+                file_age = current_time - os.path.getmtime(file_path)
+                if file_age > 3600:  # 1 hour
+                    try:
+                        os.remove(file_path)
+                        app.logger.debug(f"Cleaned up old file: {filename}")
+                    except Exception as e:
+                        app.logger.warning(f"Could not remove old file {filename}: {str(e)}")
+    except Exception as e:
+        app.logger.error(f"Error during cleanup: {str(e)}")
+
+# Clean up old files on startup
+cleanup_old_files()
 
 ALLOWED_EXTENSIONS = {'csv'}
 
@@ -60,7 +82,7 @@ REGULATIONS = {
         "name": "Peru",
         "required_fields": ["firstname", "lastname", 
                             "email", "birthdate", "address",
-                            "city", "countrycode",
+                            "city", "countrycode", "zip",
                             "username",
                             "citizenship",
                             "provincecode", "province", "personalid", 
@@ -326,6 +348,40 @@ def get_regulations():
         'regulations': {code: reg["name"] for code, reg in REGULATIONS.items()}
     })
 
+@app.route('/file-info', methods=['GET'])
+def get_file_info():
+    """Get information about the uploaded file including memory estimates"""
+    if 'current_file' not in session:
+        return jsonify({'error': 'No file has been uploaded'}), 400
+    
+    file_info = session['current_file']
+    file_path = file_info['path']
+    
+    if not os.path.exists(file_path):
+        return jsonify({'error': 'File no longer exists'}), 400
+    
+    # Get memory usage estimate
+    memory_info = data_processor.get_memory_usage_estimate(file_path)
+    
+    # Get basic file info
+    file_stats = {
+        'file_size_bytes': os.path.getsize(file_path),
+        'rows': file_info['rows'],
+        'columns': len(file_info['columns']),
+        'encoding': file_info['encoding'],
+        'delimiter': file_info['delimiter']
+    }
+    
+    return jsonify({
+        'file_stats': file_stats,
+        'memory_info': memory_info,
+        'optimization_recommendations': {
+            'use_parallel_processing': memory_info['file_size_mb'] > 10,
+            'use_chunked_processing': memory_info['use_chunked_processing'],
+            'estimated_processing_time_seconds': max(1, int(memory_info['file_size_mb'] / 10))
+        }
+    })
+
 @app.route('/regulation-fields/<regulation_code>', methods=['GET'])
 def get_regulation_fields(regulation_code):
     """Get required fields for a specific regulation"""
@@ -484,17 +540,31 @@ def upload_file():
             'column_mappings': column_mappings
         }
         
-        preview_data = []
-        with open(temp_file_path, 'r', encoding=encoding, errors='replace') as f:
-            if enclosure and enclosure != '':
-                reader = csv.DictReader(f, delimiter=delimiter, quotechar=enclosure)
-            else:
-                reader = csv.DictReader(f, delimiter=delimiter)
+        # Use optimized data processor for preview
+        try:
+            preview_info = data_processor.get_file_preview(temp_file_path, n_rows=10)
+            preview_data = preview_info['preview_data']
+            row_count = preview_info['total_rows']
+            detected_columns = preview_info['columns']
             
-            for i, row in enumerate(reader):
-                if i >= 10: 
-                    break
-                preview_data.append(row)
+            # Update file info with optimized detection
+            if preview_info['file_info']:
+                encoding = preview_info['file_info']['encoding']
+                delimiter = preview_info['file_info']['delimiter']
+        except Exception as e:
+            app.logger.warning(f"Optimized preview failed, falling back to standard method: {str(e)}")
+            # Fallback to original method
+            preview_data = []
+            with open(temp_file_path, 'r', encoding=encoding, errors='replace') as f:
+                if enclosure and enclosure != '':
+                    reader = csv.DictReader(f, delimiter=delimiter, quotechar=enclosure)
+                else:
+                    reader = csv.DictReader(f, delimiter=delimiter)
+                
+                for i, row in enumerate(reader):
+                    if i >= 10: 
+                        break
+                    preview_data.append(row)
         
         return jsonify({
             'message': 'File uploaded successfully',
@@ -512,6 +582,219 @@ def upload_file():
         app.logger.error(f"Upload error: {str(e)}")
         app.logger.error(traceback.format_exc())
         return jsonify({'error': f'Error processing file: {str(e)}'}), 500
+
+@app.route('/validate-optimized', methods=['POST'])
+def validate_optimized():
+    """Optimized validation using pandas and parallel processing"""
+    try:
+        app.logger.info("Starting optimized validation")
+        
+        if 'current_file' not in session:
+            return jsonify({'error': 'No file has been uploaded. Please upload a file first.'}), 400
+        
+        file_info = session['current_file']
+        file_path = file_info['path']
+        
+        if not os.path.exists(file_path):
+            return jsonify({'error': 'File no longer exists. Please upload again.'}), 400
+        
+        # Get validation parameters
+        selected_regulation = None
+        if request.json and 'regulation' in request.json:
+            regulation_key = request.json['regulation']
+            if regulation_key in REGULATIONS:
+                selected_regulation = REGULATIONS[regulation_key]
+                app.logger.info(f"Using regulation: {regulation_key}")
+        
+        # Determine required columns
+        if selected_regulation:
+            required_columns = selected_regulation.get('required_fields', [])
+        elif request.json and 'required_columns' in request.json:
+            required_columns = request.json['required_columns']
+        else:
+            required_columns = session.get('required_columns', [])
+        
+        if not required_columns:
+            required_columns = ['code', 'firstname', 'lastname', 'email',
+                              'birthdate', 'address', 'city', 'phone', 'cellphone',
+                              'countrycode', 'signuplanguagecode', 'currencycode',
+                              'username', 'zip', 'signupdate', 'password']
+        
+        # Get column mappings
+        column_mappings = {}
+        if request.json and 'column_mappings' in request.json:
+            column_mappings = request.json['column_mappings']
+        else:
+            column_mappings = session.get('column_mappings', {})
+        
+        # Check memory requirements
+        memory_info = data_processor.get_memory_usage_estimate(file_path)
+        app.logger.info(f"Memory estimate: {memory_info}")
+        
+        # Read CSV with pandas
+        try:
+            df = data_processor.read_csv_optimized(file_path)
+            app.logger.info(f"Successfully loaded {len(df)} rows with pandas")
+        except Exception as e:
+            app.logger.error(f"Failed to read with pandas: {str(e)}")
+            return jsonify({'error': f'Error reading file: {str(e)}'}), 500
+        
+        # Apply column mappings
+        if column_mappings:
+            df = df.rename(columns=column_mappings)
+        
+        # Prepare regulation info for validation
+        regulation_info = {
+            'regulation': selected_regulation,
+            'name': selected_regulation.get('name') if selected_regulation else None
+        }
+        
+        # Use parallel validation
+        try:
+            validation_results = data_processor.validate_dataframe_parallel(
+                df=df,
+                validation_func=validate_single_row,
+                required_columns=required_columns,
+                regulation_info=regulation_info
+            )
+            
+            app.logger.info(f"Parallel validation completed: {validation_results['total_rows']} rows processed")
+            
+            # Prepare detailed errors for CSV export
+            detailed_errors = []
+            all_results = validation_results.get('results', [])
+            for result in all_results:
+                if not result['valid']:
+                    for error in result['errors']:
+                        # Parse the error to extract field and error details
+                        error_parts = error.split(': ', 2)
+                        if len(error_parts) >= 2:
+                            code_field = error_parts[0]
+                            error_message = ': '.join(error_parts[1:])
+                            
+                            # Extract field name
+                            code_field_parts = code_field.rsplit(' ', 1)
+                            if len(code_field_parts) == 2:
+                                field_name = code_field_parts[1]
+                            else:
+                                field_name = "unknown"
+                            
+                            # Extract actual value if present
+                            actual_value = ""
+                            if "': '" in error_message and error_message.endswith("'"):
+                                value_start = error_message.rfind(": '") + 3
+                                value_end = error_message.rfind("'")
+                                actual_value = error_message[value_start:value_end]
+                                error_type = error_message[:error_message.rfind(": '")]
+                            else:
+                                error_type = error_message
+                                actual_value = ""
+                            
+                            detailed_errors.append({
+                                'row_number': result['row'],
+                                'code': result['code'],
+                                'field_name': field_name,
+                                'error_type': error_type,
+                                'error_message': error_message,
+                                'invalid_value': actual_value
+                            })
+            
+            # Store detailed errors in temporary file instead of session
+            if detailed_errors:
+                errors_file_id = str(uuid.uuid4())
+                errors_file_path = os.path.join(TEMP_FOLDER, f"errors_{errors_file_id}.json")
+                
+                with open(errors_file_path, 'w', encoding='utf-8') as f:
+                    json.dump(detailed_errors, f, ensure_ascii=False, indent=2)
+                
+                session['errors_file_id'] = errors_file_id
+            else:
+                session.pop('errors_file_id', None)
+            
+            # Limit results for response
+            limited_results = validation_results.copy()
+            limited_results['results'] = validation_results['results'][:100]
+            limited_results['has_errors_for_download'] = len(detailed_errors) > 0
+            
+            return jsonify(limited_results)
+            
+        except Exception as e:
+            app.logger.error(f"Parallel validation failed: {str(e)}")
+            return jsonify({'error': f'Error during parallel validation: {str(e)}'}), 500
+            
+    except Exception as e:
+        app.logger.error(f"Optimized validation error: {str(e)}", exc_info=True)
+        return jsonify({'error': f'Error during optimized validation: {str(e)}'}), 500
+
+@app.route('/download-errors', methods=['GET'])
+def download_errors():
+    """Download validation errors as CSV file"""
+    try:
+        if 'errors_file_id' not in session:
+            return jsonify({'error': 'No validation errors available for download'}), 400
+        
+        errors_file_id = session['errors_file_id']
+        errors_file_path = os.path.join(TEMP_FOLDER, f"errors_{errors_file_id}.json")
+        
+        if not os.path.exists(errors_file_path):
+            return jsonify({'error': 'Validation errors file no longer exists'}), 400
+        
+        # Load detailed errors from file
+        try:
+            with open(errors_file_path, 'r', encoding='utf-8') as f:
+                detailed_errors = json.load(f)
+        except Exception as e:
+            app.logger.error(f"Error reading errors file: {str(e)}")
+            return jsonify({'error': 'Error reading validation errors'}), 500
+        
+        if not detailed_errors:
+            return jsonify({'error': 'No validation errors to download'}), 400
+        
+        # Create CSV content
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Write header
+        writer.writerow([
+            'Row Number',
+            'Code', 
+            'Field Name',
+            'Error Type',
+            'Invalid Value',
+            'Full Error Message'
+        ])
+        
+        # Write error data
+        for error in detailed_errors:
+            writer.writerow([
+                error['row_number'],
+                error['code'],
+                error['field_name'],
+                error['error_type'],
+                error['invalid_value'],
+                error['error_message']
+            ])
+        
+        # Create response
+        csv_content = output.getvalue()
+        output.close()
+        
+        response = make_response(csv_content)
+        response.headers['Content-Type'] = 'text/csv'
+        response.headers['Content-Disposition'] = f'attachment; filename=validation_errors_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+        
+        # Clean up the temporary errors file after successful download
+        try:
+            os.remove(errors_file_path)
+            session.pop('errors_file_id', None)
+        except Exception as e:
+            app.logger.warning(f"Could not remove errors file: {str(e)}")
+        
+        return response
+        
+    except Exception as e:
+        app.logger.error(f"Error generating CSV download: {str(e)}")
+        return jsonify({'error': f'Error generating CSV: {str(e)}'}), 500
 
 @app.route('/validate', methods=['POST'])
 def validate():
@@ -749,8 +1032,12 @@ def validate():
                     if field_lower == 'email':
                         email_error = enhanced_email_validation(value)
                         if email_error:
-                            row_errors.append(f"{code_value} {email_error}")
-                            error_counter[email_error] += 1
+                            # Generic error for summary
+                            generic_error = email_error
+                            # Enhanced error with actual value for detailed display
+                            enhanced_error = enhance_error_with_value(email_error, 'email', value)
+                            row_errors.append(f"{code_value} {enhanced_error}")
+                            error_counter[generic_error] += 1
                             is_valid = False
                     
                     elif field_lower == 'birthdate':
@@ -765,9 +1052,12 @@ def validate():
                     elif field_lower in ['phone', 'cellphone']:
                         phone_error = validate_phone_number(value)
                         if phone_error:
-                            error_msg = f"{field}: {phone_error}"
-                            row_errors.append(f"{code_value} {error_msg}")
-                            error_counter[error_msg] += 1
+                            # Generic error for summary
+                            generic_error = f"{field}: {phone_error}"
+                            # Enhanced error with actual value for detailed display
+                            enhanced_error = f"{field}: {enhance_error_with_value(phone_error, field, value)}"
+                            row_errors.append(f"{code_value} {enhanced_error}")
+                            error_counter[generic_error] += 1
                             is_valid = False
                     
                     elif field_lower == 'firstname':
@@ -826,17 +1116,23 @@ def validate():
                             personalid_error = validate_personalid(value)
                         
                         if personalid_error:
-                            error_msg = f"personalid: {personalid_error}"
-                            row_errors.append(f"{code_value} {error_msg}")
-                            error_counter[error_msg] += 1
+                            # Generic error for summary
+                            generic_error = f"personalid: {personalid_error}"
+                            # Enhanced error with actual value for detailed display
+                            enhanced_error = f"personalid: {enhance_error_with_value(personalid_error, 'personalid', value)}"
+                            row_errors.append(f"{code_value} {enhanced_error}")
+                            error_counter[generic_error] += 1
                             is_valid = False
 
                     elif field_lower == 'idcardno':
                         idcardno_error = validate_idcardno(value)
                         if idcardno_error:
-                            error_msg = f"idcardno: {idcardno_error}"
-                            row_errors.append(f"{code_value} {error_msg}")
-                            error_counter[error_msg] += 1
+                            # Generic error for summary
+                            generic_error = f"idcardno: {idcardno_error}"
+                            # Enhanced error with actual value for detailed display
+                            enhanced_error = f"idcardno: {enhance_error_with_value(idcardno_error, 'idcardno', value)}"
+                            row_errors.append(f"{code_value} {enhanced_error}")
+                            error_counter[generic_error] += 1
                             is_valid = False
 
                     elif field_lower == 'citizenship':
@@ -961,6 +1257,57 @@ def validate():
         duplicate_personalid_count = len(duplicate_personalids)
         duplicate_idcardno_count = len(duplicate_idcardnos)
         
+        # Prepare detailed errors for CSV export
+        detailed_errors = []
+        for result in validation_results:
+            if not result['valid']:
+                for error in result['errors']:
+                    # Parse the error to extract field and error details
+                    error_parts = error.split(': ', 2)  # Split on first 2 colons
+                    if len(error_parts) >= 2:
+                        code_field = error_parts[0]  # "67081402 cellphone"
+                        error_message = ': '.join(error_parts[1:])  # "Phone number has invalid format: 'abc123'"
+                        
+                        # Extract field name
+                        code_field_parts = code_field.rsplit(' ', 1)
+                        if len(code_field_parts) == 2:
+                            field_name = code_field_parts[1]
+                        else:
+                            field_name = "unknown"
+                        
+                        # Extract actual value if present
+                        actual_value = ""
+                        if "': '" in error_message and error_message.endswith("'"):
+                            value_start = error_message.rfind(": '") + 3
+                            value_end = error_message.rfind("'")
+                            actual_value = error_message[value_start:value_end]
+                            # Remove the value part from error message for clean error type
+                            error_type = error_message[:error_message.rfind(": '")]
+                        else:
+                            error_type = error_message
+                            actual_value = ""
+                        
+                        detailed_errors.append({
+                            'row_number': result['row'],
+                            'code': result['code'],
+                            'field_name': field_name,
+                            'error_type': error_type,
+                            'error_message': error_message,
+                            'invalid_value': actual_value
+                        })
+        
+        # Store detailed errors in temporary file instead of session
+        if detailed_errors:
+            errors_file_id = str(uuid.uuid4())
+            errors_file_path = os.path.join(TEMP_FOLDER, f"errors_{errors_file_id}.json")
+            
+            with open(errors_file_path, 'w', encoding='utf-8') as f:
+                json.dump(detailed_errors, f, ensure_ascii=False, indent=2)
+            
+            session['errors_file_id'] = errors_file_id
+        else:
+            session.pop('errors_file_id', None)
+        
         return jsonify({
             'validation_complete': True,
             'total_rows': len(validation_results),
@@ -971,10 +1318,11 @@ def validate():
             'duplicate_username_count': duplicate_username_count,
             'duplicate_personalid_count': duplicate_personalid_count,
             'duplicate_idcardno_count': duplicate_idcardno_count,
-            'results': validation_results[:100],
+            'results': validation_results[:10],
             'all_columns': all_columns,
             'required_columns': required_columns,
-            'column_mappings': column_mappings  
+            'column_mappings': column_mappings,
+            'has_errors_for_download': len(detailed_errors) > 0
         })
     except Exception as e:
         app.logger.error(f"Validation error: {str(e)}", exc_info=True)
